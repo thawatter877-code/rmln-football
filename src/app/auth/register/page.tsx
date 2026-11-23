@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Sparkles, Shield, Lock, User, Mail, ArrowRight, Trophy } from "lucide-react";
+import { Lock, User, Mail, ArrowRight, Trophy } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const CLUBS = [
@@ -30,75 +30,74 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-100 flex items-center justify-center p-4 py-12">
-      <div className="magic-frame w-full max-w-md p-6 sm:p-8 space-y-6">
+    <div className="min-h-screen bg-white text-[#2f3437] flex items-center justify-center p-4 py-12">
+      <div className="notion-card w-full max-w-sm p-6 sm:p-8 space-y-5">
         
         {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-700 flex items-center justify-center font-black text-black text-sm mx-auto shadow-lg shadow-amber-500/20">
-            RMLN
+        <div className="text-center space-y-1.5">
+          <div className="w-9 h-9 rounded-md bg-[#2f3437] text-white flex items-center justify-center font-bold text-xs mx-auto">
+            RL
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-white">
+          <h1 className="text-lg font-bold text-[#2f3437]">
             สมัครสมาชิก RMLN
           </h1>
-          <p className="text-xs text-slate-400">
-            สร้างบัญชีแฟนบอลเพื่อร่วมคอมเมนต์และรับโควตาปั้นนักเตะเยาวชน
+          <p className="text-xs text-[#787774]">
+            สร้างบัญชีเพื่อร่วมแสดงความคิดเห็นและทดลองใช้ระบบอคาเดมี่
           </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-bold">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>โบนัสต้อนรับ: 198,000 Coins + 282 Gems ฟรี!</span>
+          <div className="notion-tag font-mono text-[10px] mt-1">
+            รับโบนัสเริ่มต้น: 198,000 Coins • 282 Gems
           </div>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+            <label className="text-xs font-medium text-[#2f3437] block mb-1">
               ชื่อผู้ใช้ (Username)
             </label>
             <div className="relative">
-              <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <User className="w-3.5 h-3.5 text-[#9b9a97] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="เช่น MagicStriker"
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#070b13] border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                placeholder="ชื่อผู้ใช้"
+                className="w-full pl-9 pr-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] focus:outline-none focus:border-[#787774]"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+            <label className="text-xs font-medium text-[#2f3437] block mb-1">
               อีเมล
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Mail className="w-3.5 h-3.5 text-[#9b9a97] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="fan@example.com"
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#070b13] border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                placeholder="email@example.com"
+                className="w-full pl-9 pr-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] focus:outline-none focus:border-[#787774]"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+            <label className="text-xs font-medium text-[#2f3437] block mb-1">
               สโมสรที่ชอบ (Favorite Club)
             </label>
             <div className="relative">
-              <Trophy className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Trophy className="w-3.5 h-3.5 text-[#9b9a97] absolute left-3 top-1/2 -translate-y-1/2" />
               <select
                 value={favoriteClub}
                 onChange={(e) => setFavoriteClub(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#070b13] border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 appearance-none cursor-pointer"
+                className="w-full pl-9 pr-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] focus:outline-none focus:border-[#787774] cursor-pointer"
               >
                 {CLUBS.map((c) => (
-                  <option key={c} value={c} className="bg-slate-900 text-white">
+                  <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
@@ -107,18 +106,18 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+            <label className="text-xs font-medium text-[#2f3437] block mb-1">
               รหัสผ่าน
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Lock className="w-3.5 h-3.5 text-[#9b9a97] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#070b13] border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                className="w-full pl-9 pr-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] focus:outline-none focus:border-[#787774]"
               />
             </div>
           </div>
@@ -126,16 +125,16 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg btn-gold text-xs font-bold flex items-center justify-center gap-2 shadow-lg"
+            className="notion-btn-primary w-full py-2 text-xs"
           >
-            <span>{loading ? "กำลังสร้างบัญชี..." : "ลงทะเบียนรับโบนัสทันที"}</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>{loading ? "กำลังดำเนินการ..." : "สร้างบัญชีสมาชิก"}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 
-        <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
+        <div className="text-center text-xs text-[#787774] pt-2 border-t border-[#e9e9e7]">
           มีบัญชีอยู่แล้ว?{" "}
-          <Link href="/auth/login" className="text-amber-400 font-bold hover:underline">
+          <Link href="/auth/login" className="text-[#2f3437] font-semibold hover:underline">
             เข้าสู่ระบบที่นี่
           </Link>
         </div>

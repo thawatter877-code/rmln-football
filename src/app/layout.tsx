@@ -5,8 +5,8 @@ import Footer from "@/components/Footer";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
-  title: "RMLN - ร่ายมนต์ลูกหนัง | THE 90-MINUTE FOOTBALL MAGIC",
-  description: "สำนักข่าวและมีเดียฟุตบอลระดับโลก เกาะติดทุกมนต์สะกด 90 นาทีในสนาม ตลาดซื้อขายนักเตะ และบทวิเคราะห์แท็กติกเชิงลึก",
+  title: "RMLN • ร่ายมนต์ลูกหนัง | The 90-Minute Football Magic",
+  description: "วารสารและรายงานข่าวฟุตบอลระดับโลก บทวิเคราะห์แท็กติก ตลาดซื้อขายนักเตะ และคอมมูนิตี้",
 };
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className="dark">
-      <body className="min-h-screen bg-[#080c14] text-slate-100 flex flex-col antialiased">
+    <html lang="th">
+      <body className="min-h-screen bg-white text-[#2f3437] flex flex-col antialiased">
         <AuthProvider>
           <Navbar />
           <main className="flex-1">

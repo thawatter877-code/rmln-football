@@ -12,9 +12,10 @@ import {
   MessageSquare, 
   ThumbsUp, 
   ArrowLeft,
-  Send
+  Send,
+  Heart
 } from "lucide-react";
-import { MOCK_NEWS, NewsArticle, NewsComment } from "@/data/mockNews";
+import { MOCK_NEWS, NewsComment } from "@/data/mockNews";
 import { useAuth } from "@/context/AuthContext";
 
 export default function NewsDetailClient() {
@@ -66,54 +67,54 @@ export default function NewsDetailClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-100 py-8 px-4 sm:px-6">
-      <article className="max-w-[850px] mx-auto space-y-8">
+    <div className="min-h-screen bg-white text-[#2f3437] py-8 px-4 sm:px-6">
+      <article className="max-w-[780px] mx-auto space-y-6">
         
-        {/* Back button */}
+        {/* Back Link */}
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-400 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-[#787774] hover:text-[#2f3437] transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-3.5 h-3.5" />
           <span>กลับหน้าแรก</span>
         </Link>
 
         {/* Header */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold font-mono">
+            <span className="notion-tag font-mono">
               {article.league}
             </span>
-            <span className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 text-xs font-bold">
+            <span className="notion-tag">
               {article.categoryLabel}
             </span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-black text-white leading-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#2f3437] leading-tight tracking-tight">
             {article.title}
           </h1>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400 pt-2 border-y border-slate-800/80 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-[#9b9a97] pt-2 border-y border-[#e9e9e7] py-2.5">
             <div className="flex items-center gap-3">
-              <span className="text-amber-400 font-bold">{article.author}</span>
+              <span className="text-[#37352f] font-medium">{article.author}</span>
               <span>•</span>
               <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {article.publishedAt}</span>
               <span>•</span>
-              <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {article.views.toLocaleString()} วิว</span>
+              <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {article.views.toLocaleString()} ครั้ง</span>
             </div>
 
             <button
               onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] hover:bg-[#f7f6f3] text-[#787774] hover:text-[#2f3437] transition-colors"
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>{copied ? "คัดลอกลิงก์แล้ว!" : "แชร์ข่าว"}</span>
+              <span>{copied ? "คัดลอกลิงก์แล้ว" : "แชร์"}</span>
             </button>
           </div>
         </div>
 
-        {/* Hero Image */}
-        <div className="rounded-2xl overflow-hidden border border-amber-500/30 aspect-video w-full shadow-2xl">
+        {/* Featured Image */}
+        <div className="rounded-lg overflow-hidden border border-[#e9e9e7] aspect-[16/10] w-full bg-[#f1f1ef]">
           <img
             src={article.imageUrl}
             alt={article.title}
@@ -121,108 +122,108 @@ export default function NewsDetailClient() {
           />
         </div>
 
-        {/* Lead Excerpt */}
-        <div className="p-5 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#0c1424] to-[#070b13] border-l-4 border-amber-400 text-slate-200 text-sm sm:text-base font-semibold leading-relaxed">
+        {/* Notion Callout Excerpt */}
+        <div className="notion-callout p-4 text-[#37352f] text-sm leading-relaxed font-medium">
           {article.excerpt}
         </div>
 
-        {/* Body Content */}
-        <div className="text-slate-300 text-sm sm:text-base leading-relaxed space-y-4 whitespace-pre-line font-normal">
+        {/* Content Body */}
+        <div className="text-[#37352f] text-sm sm:text-base leading-relaxed space-y-4 whitespace-pre-line font-normal">
           {article.content}
         </div>
 
-        {/* REACTIONS BAR */}
-        <div className="p-6 rounded-2xl bg-[#0c1220] border border-slate-800 text-center space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            ความรู้สึกต่อ 90 นาทีนี้
+        {/* REACTIONS (Notion Minimalist Buttons with Lucide Icons) */}
+        <div className="notion-card p-4 text-center space-y-2.5">
+          <h3 className="text-xs font-semibold text-[#787774]">
+            ปฏิกิริยาต่อรายงานนี้
           </h3>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => handleReaction("fire")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
                 reacted === "fire"
-                  ? "bg-red-950/60 border-red-500 text-red-300"
-                  : "bg-slate-900 border-slate-800 text-slate-300 hover:border-red-500/40"
+                  ? "bg-[#2f3437] text-white border-[#2f3437]"
+                  : "bg-[#fbfbfa] border-[#e9e9e7] text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3]"
               }`}
             >
-              <span>🔥</span>
-              <span>ไฟลุก ({reactions.fire})</span>
+              <Flame className="w-3.5 h-3.5" />
+              <span>น่าสนใจ ({reactions.fire})</span>
             </button>
 
             <button
               onClick={() => handleReaction("magic")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
                 reacted === "magic"
-                  ? "bg-amber-950/60 border-amber-500 text-amber-300"
-                  : "bg-slate-900 border-slate-800 text-slate-300 hover:border-amber-500/40"
+                  ? "bg-[#2f3437] text-white border-[#2f3437]"
+                  : "bg-[#fbfbfa] border-[#e9e9e7] text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3]"
               }`}
             >
-              <span>✨</span>
-              <span>ร่ายมนต์ ({reactions.magic})</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>ยอดเยี่ยม ({reactions.magic})</span>
             </button>
 
             <button
               onClick={() => handleReaction("clap")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
                 reacted === "clap"
-                  ? "bg-emerald-950/60 border-emerald-500 text-emerald-300"
-                  : "bg-slate-900 border-slate-800 text-slate-300 hover:border-emerald-500/40"
+                  ? "bg-[#2f3437] text-white border-[#2f3437]"
+                  : "bg-[#fbfbfa] border-[#e9e9e7] text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3]"
               }`}
             >
-              <span>👏</span>
-              <span>ปรบมือ ({reactions.clap})</span>
+              <ThumbsUp className="w-3.5 h-3.5" />
+              <span>เห็นด้วย ({reactions.clap})</span>
             </button>
           </div>
         </div>
 
         {/* COMMENTS SECTION */}
-        <section className="space-y-6 pt-4 border-t border-slate-800">
+        <section className="space-y-4 pt-4 border-t border-[#e9e9e7]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-amber-400" />
-              <h2 className="text-lg font-bold text-white">
-                ความคิดเห็นแฟนบอล ({comments.length})
+              <MessageSquare className="w-4 h-4 text-[#787774]" />
+              <h2 className="text-sm font-semibold text-[#2f3437]">
+                ความคิดเห็น ({comments.length})
               </h2>
             </div>
           </div>
 
           {/* Comment Form */}
           {user ? (
-            <form onSubmit={handlePostComment} className="p-4 rounded-xl bg-[#0c1220] border border-slate-800 space-y-3">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <span className="font-bold text-white">{user.displayName}</span>
-                <span className="px-1.5 py-0.2 rounded bg-slate-800 text-amber-400 text-[10px] font-mono">
+            <form onSubmit={handlePostComment} className="notion-card p-3.5 space-y-2.5">
+              <div className="flex items-center gap-2 text-xs text-[#787774]">
+                <span className="font-semibold text-[#2f3437]">{user.displayName}</span>
+                <span className="notion-tag text-[10px]">
                   {user.favoriteClub}
                 </span>
               </div>
               <textarea
                 value={commentInput}
                 onChange={(e) => setCommentInput(e.target.value)}
-                placeholder="ร่วมแสดงความคิดเห็น วิเคราะห์รูปเกมอย่างสร้างสรรค์..."
+                placeholder="ร่วมแสดงความคิดเห็นหรือวิเคราะห์ประเด็นนี้..."
                 rows={3}
-                className="w-full p-3 rounded-lg bg-[#070b13] border border-slate-700 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+                className="w-full p-2.5 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] placeholder:text-[#9b9a97] focus:outline-none focus:border-[#787774]"
               />
               <div className="flex justify-end">
                 <button
                   type="submit"
                   disabled={!commentInput.trim()}
-                  className="px-4 py-2 rounded-lg btn-gold text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                  className="notion-btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>ส่งความคิดเห็น</span>
+                  <Send className="w-3 h-3" />
+                  <span>ส่งข้อความ</span>
                 </button>
               </div>
             </form>
           ) : (
-            <div className="p-6 rounded-xl bg-[#0c1220] border border-slate-800 text-center space-y-2">
-              <p className="text-xs text-slate-300">
-                เข้าสู่ระบบเพื่อร่วมแสดงความคิดเห็นใต้ข่าวและสะสมคะแนน
+            <div className="notion-callout p-4 text-center space-y-2">
+              <p className="text-xs text-[#787774]">
+                เข้าสู่ระบบเพื่อร่วมแสดงความคิดเห็นในบทความนี้
               </p>
-              <div className="flex justify-center gap-3 pt-1">
-                <Link href="/auth/login" className="px-4 py-1.5 rounded-lg bg-slate-800 text-xs font-bold text-white hover:bg-slate-700">
+              <div className="flex justify-center gap-2">
+                <Link href="/auth/login" className="notion-btn-secondary px-3 py-1 text-xs">
                   เข้าสู่ระบบ
                 </Link>
-                <Link href="/auth/register" className="px-4 py-1.5 rounded-lg btn-gold text-xs font-bold">
+                <Link href="/auth/register" className="notion-btn-primary px-3 py-1 text-xs">
                   สมัครสมาชิก
                 </Link>
               </div>
@@ -230,25 +231,25 @@ export default function NewsDetailClient() {
           )}
 
           {/* Comments List */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {comments.map((comment) => (
-              <div key={comment.id} className="p-4 rounded-xl bg-[#0c1220] border border-slate-800/80 space-y-2">
+              <div key={comment.id} className="notion-card p-3 space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{comment.userName}</span>
-                    <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] text-amber-400 font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-[#2f3437]">{comment.userName}</span>
+                    <span className="notion-tag text-[10px]">
                       {comment.userClub}
                     </span>
                   </div>
-                  <span className="text-slate-500 text-[11px]">{comment.createdAt}</span>
+                  <span className="text-[#9b9a97] text-[11px]">{comment.createdAt}</span>
                 </div>
-                <p className="text-xs text-slate-200 leading-relaxed">
+                <p className="text-xs text-[#37352f] leading-relaxed">
                   {comment.content}
                 </p>
-                <div className="flex items-center gap-1 text-[11px] text-slate-400 pt-1">
-                  <button className="flex items-center gap-1 hover:text-amber-400 transition-colors">
+                <div className="flex items-center gap-1 text-[11px] text-[#9b9a97] pt-1">
+                  <button className="flex items-center gap-1 hover:text-[#2f3437] transition-colors">
                     <ThumbsUp className="w-3 h-3" />
-                    <span>{comment.likesCount} ถูกใจ</span>
+                    <span>{comment.likesCount}</span>
                   </button>
                 </div>
               </div>

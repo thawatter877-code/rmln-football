@@ -2,104 +2,111 @@
 
 @layer base {
   :root {
-    --bg-main: #080c14;
-    --bg-surface: #0f1624;
-    --bg-subtle: #151e30;
-    --bg-card: #121929;
-    --border-gold: rgba(212, 175, 55, 0.35);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --gold: #d4af37;
-    --gold-bright: #fbbf24;
-    --gold-glow: rgba(212, 175, 55, 0.25);
-    --neon-cyan: #06b6d4;
-    --neon-emerald: #10b981;
-    --neon-red: #ef4444;
-    --text-primary: #f8fafc;
-    --text-muted: #94a3b8;
+    --bg-main: #ffffff;
+    --bg-subtle: #fbfbfa;
+    --bg-surface: #ffffff;
+    --bg-callout: #f7f6f3;
+    --border: #e9e9e7;
+    --border-hover: #d3d1cb;
+    --text-primary: #2f3437;
+    --text-secondary: #787774;
+    --text-muted: #9b9a97;
+    --accent: #2383e2;
+    --accent-subtle: #ebf5fe;
   }
 }
 
 body {
   background-color: var(--bg-main);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
-  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", Helvetica, Arial, sans-serif;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Ornate Fantasy / Gold Border matching youth academy screenshot */
-.magic-frame {
-  position: relative;
-  border: 1px solid var(--border-gold);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(19, 27, 46, 0.95) 0%, rgba(13, 19, 32, 0.98) 100%);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 12px var(--gold-glow);
+/* Notion-style Clean Card */
+.notion-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.15s ease;
 }
 
-.magic-frame::before,
-.magic-frame::after {
-  content: "";
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-color: var(--gold-bright);
-  pointer-events: none;
+.notion-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.magic-frame::before {
-  top: -2px;
-  left: -2px;
-  border-top: 2px solid var(--gold-bright);
-  border-left: 2px solid var(--gold-bright);
+/* Notion-style Callout Box */
+.notion-callout {
+  background-color: var(--bg-callout);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
-.magic-frame::after {
-  bottom: -2px;
-  right: -2px;
-  border-bottom: 2px solid var(--gold-bright);
-  border-right: 2px solid var(--gold-bright);
+/* Notion-style Badge / Tag */
+.notion-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background-color: var(--bg-callout);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
-/* Gold glow button */
-.btn-gold {
-  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
-  color: #000;
-  font-weight: 700;
-  transition: all 0.2s ease;
-  box-shadow: 0 0 15px rgba(234, 179, 8, 0.35);
+/* Notion-style Button */
+.notion-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: #2f3437;
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
-.btn-gold:hover {
-  background: linear-gradient(135deg, #facc15 0%, #d97706 100%);
-  box-shadow: 0 0 22px rgba(250, 204, 21, 0.55);
-  transform: translateY(-1px);
+.notion-btn-primary:hover {
+  background-color: #191919;
 }
 
-/* Diamond / Gem Pill */
-.gem-pill {
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px solid rgba(6, 182, 212, 0.35);
-  color: #67e8f9;
+.notion-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: #ffffff;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
-/* Coin Pill */
-.coin-pill {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #fcd34d;
+.notion-btn-secondary:hover {
+  background-color: var(--bg-callout);
+  border-color: var(--border-hover);
 }
 
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-main);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #e2e1de;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #c7c5c0;
 }
