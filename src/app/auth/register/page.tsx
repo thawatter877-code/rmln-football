@@ -32,7 +32,7 @@ export default function RegisterPage() {
     setError(null);
     const result = await register(username.trim(), email.trim(), password, favoriteClub);
     setLoading(false);
-    if (result.success) router.push("/academy");
+    if (result.success) router.push("/");
     else setError(result.error || "สมัครสมาชิกไม่สำเร็จ");
   };
 
@@ -49,11 +49,8 @@ export default function RegisterPage() {
             สมัครสมาชิก RMLN
           </h1>
           <p className="text-xs text-[#787774]">
-            สร้างบัญชีเพื่อร่วมแสดงความคิดเห็นและทดลองใช้ระบบอคาเดมี่
+            สร้างบัญชีเพื่อร่วมแสดงความคิดเห็นและกดรีแอคชันข่าว
           </p>
-          <div className="notion-tag font-mono text-[10px] mt-1">
-            รับโบนัสเริ่มต้น: 100,000 Coins • 200 Gems
-          </div>
         </div>
 
         {/* Form */}

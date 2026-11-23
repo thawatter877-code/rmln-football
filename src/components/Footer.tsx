@@ -50,7 +50,7 @@ export default function Footer() {
             ระบบและกิจกรรม
           </h4>
           <ul className="space-y-1.5">
-            <li><Link href="/academy" className="hover:text-[#2f3437] transition-colors">อคาเดมี่เยาวชน (Youth Academy)</Link></li>
+            <li><Link href="/academy" className="hover:text-[#2f3437] transition-colors">ดาวรุ่ง TOP 100 ของโลก</Link></li>
             <li><Link href="/auth/register" className="hover:text-[#2f3437] transition-colors">สมัครสมาชิกแฟนบอล</Link></li>
             <li><Link href="/news" className="hover:text-[#2f3437] transition-colors">คลังข่าวทั้งหมด</Link></li>
           </ul>
