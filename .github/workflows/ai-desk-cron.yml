@@ -1,0 +1,30 @@
+# Wakes the RMLN AI news desk every 10 minutes so new stories are processed even without site traffic.
+# Setup: repo Settings > Secrets and variables > Actions
+#   - secret   CRON_SECRET    (same value as CRON_SECRET in Cloudflare Pages)
+#   - variable RMLN_SITE_URL  (optional, defaults to https://rmln-news.pages.dev)
+name: AI news desk
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger AI desk
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.RMLN_SITE_URL || 'https://rmln-news.pages.dev' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set - skipping"; exit 0
+          fi
+          curl -sS --fail-with-body --max-time 280 -X POST "$SITE_URL/api/ai-desk" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -d '{"action":"run"}'

@@ -26,6 +26,10 @@ export interface NewsArticle {
   autoTranslated?: boolean;
   /** user id of the staff member who published it (editorial articles only) */
   createdBy?: string;
+  /** "published" | "draft" (drafts are only visible to staff) */
+  status?: string;
+  /** AI desk metadata: model + fact-check result */
+  aiNotes?: { model?: string; factCheck?: { verdict: string; problems: string[] } } | null;
   isLive: boolean;
 }
 
@@ -67,6 +71,8 @@ export function mapDbArticle(row: any): NewsArticle {
     sourceName: row.source_name || undefined,
     originalTitle: row.original_title || undefined,
     createdBy: row.created_by || undefined,
+    status: row.status || "published",
+    aiNotes: parseJson(row.ai_notes),
     isLive: false,
   };
 }
@@ -95,6 +101,15 @@ export function mapLiveArticle(item: any): NewsArticle {
     autoTranslated: !!item.translated,
     isLive: true,
   };
+}
+
+function parseJson(v: string | null | undefined) {
+  if (!v) return null;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
 }
 
 /** D1 stores CURRENT_TIMESTAMP as "YYYY-MM-DD HH:MM:SS" (UTC, no zone) */

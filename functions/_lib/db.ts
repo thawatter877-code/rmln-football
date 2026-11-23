@@ -111,6 +111,8 @@ export async function ensureRmlnSchema(db: any) {
       "ALTER TABLE rmln_news ADD COLUMN source_name TEXT",
       "ALTER TABLE rmln_news ADD COLUMN original_title TEXT",
       "ALTER TABLE rmln_news ADD COLUMN created_by TEXT",
+      "ALTER TABLE rmln_news ADD COLUMN status TEXT DEFAULT 'published'",
+      "ALTER TABLE rmln_news ADD COLUMN ai_notes TEXT",
     ];
     for (const sql of migrations) {
       // Fails harmlessly with "duplicate column" when the column already exists
@@ -122,6 +124,24 @@ export async function ensureRmlnSchema(db: any) {
         source TEXT NOT NULL,
         th TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run().catch(() => {});
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS rmln_ai_jobs (
+        source_url TEXT PRIMARY KEY,
+        source_name TEXT,
+        original_title TEXT,
+        status TEXT NOT NULL,            -- 'processing' | 'published' | 'draft' | 'skipped' | 'failed'
+        attempts INTEGER DEFAULT 0,
+        news_id TEXT,
+        error TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run().catch(() => {});
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS rmln_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       )
     `).run().catch(() => {});
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_rmln_news_source ON rmln_news(source_url)").run().catch(() => {});

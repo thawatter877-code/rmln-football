@@ -230,6 +230,12 @@ function ArticleView() {
           </div>
         )}
 
+        {article.createdBy === "ai-desk" && (
+          <p className="text-[11px] text-[#9b9a97]">
+            ข่าวนี้เรียบเรียงด้วยระบบ AI ของกองบรรณาธิการ RMLN จากข่าวต้นฉบับ และผ่านการตรวจสอบข้อเท็จจริงเทียบกับต้นฉบับ
+          </p>
+        )}
+
         {!article.isLive && article.sourceUrl && (
           <p className="text-xs text-[#787774]">
             อ้างอิง:{" "}
