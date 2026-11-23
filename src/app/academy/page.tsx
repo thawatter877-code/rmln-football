@@ -1,23 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Sparkles, 
   Coins, 
   Gem, 
   Dices, 
   Search, 
-  Info, 
   Shield, 
   Zap, 
   Crosshair, 
   Sprout, 
   PenTool, 
-  Trophy,
-  Check,
-  Compass,
-  User,
-  Activity
+  Trophy
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -61,6 +56,30 @@ export default function YouthAcademyPage() {
     }
   ]);
   const [message, setMessage] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState(false);
+
+  // Fetch real scouted roster from Cloudflare D1
+  useEffect(() => {
+    if (!user) return;
+    fetch(`/api/scout?userId=${encodeURIComponent(user.id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.players && Array.isArray(data.players) && data.players.length > 0) {
+          const mapped: ScoutedPlayer[] = data.players.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            nationality: p.nationality,
+            position: p.position,
+            age: p.age,
+            overall: p.overall,
+            potential: p.potential,
+            specialSkill: p.special_skill || "ทักษะมาตรฐาน",
+          }));
+          setScoutedRoster(mapped);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   const handleRandomNationality = () => {
     const random = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
@@ -68,23 +87,25 @@ export default function YouthAcademyPage() {
     setSearchCountry(random);
   };
 
-  const handleScoutPlayer = (useCoins: boolean) => {
-    if (!user) return;
+  const handleScoutPlayer = async (useCoins: boolean) => {
+    if (!user || loadingAction) return;
     
+    const costCoins = useCoins ? 20000 : 0;
+    const costGems = useCoins ? 20 : 40;
+
     if (useCoins) {
       if (user.coins < 20000 || user.gems < 20) {
         setMessage("เหรียญหรือเพชรไม่เพียงพอ");
         return;
       }
-      updateUserEconomy(-20000, -20);
     } else {
       if (user.gems < 40) {
         setMessage("เพชรไม่เพียงพอ (ต้องการ 40 เพชร)");
         return;
       }
-      updateUserEconomy(0, -40);
     }
 
+    setLoadingAction(true);
     const nat = selectedNationality === "สุ่มสัญชาติ" 
       ? COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)] 
       : selectedNationality;
@@ -93,24 +114,65 @@ export default function YouthAcademyPage() {
     const potential = Math.floor(Math.random() * 10) + 88;
     const randomFirst = ["Leo", "Kai", "Arthur", "Danilo", "Kenji", "Tawan", "Alex", "Bruno"][Math.floor(Math.random() * 8)];
     const randomLast = ["Silva", "Magic", "Santos", "Wonder", "Sterling", "Kaiser"][Math.floor(Math.random() * 6)];
+    const playerName = `${randomFirst} ${randomLast}`;
+    const posLabel = POSITIONS.find(p => p.id === pos)?.label || "ตัวกลาง";
+    const skill = "ความแม่นยำในจังหวะสุดท้าย (90-Min Precision)";
 
-    const newPlayer: ScoutedPlayer = {
-      id: `p-${Date.now()}`,
-      name: `${randomFirst} ${randomLast}`,
-      nationality: nat,
-      position: POSITIONS.find(p => p.id === pos)?.label || "ตัวกลาง",
-      age: Math.floor(Math.random() * 2) + 16,
-      overall,
-      potential,
-      specialSkill: "ความแม่นยำในจังหวะสุดท้าย (90-Min Precision)"
-    };
+    try {
+      const res = await fetch("/api/scout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          name: playerName,
+          nationality: nat,
+          position: posLabel,
+          age: Math.floor(Math.random() * 2) + 16,
+          overall,
+          potential,
+          specialSkill: skill,
+          costCoins,
+          costGems,
+        }),
+      });
 
-    setScoutedRoster([newPlayer, ...scoutedRoster]);
-    setMessage(`สำเร็จ! ปั้นเยาวชนใหม่: ${newPlayer.name} (เรตติ้ง ${newPlayer.overall}, ศักยภาพ ${newPlayer.potential})`);
+      const data = await res.json();
+      const newPlayer: ScoutedPlayer = {
+        id: data?.player?.id || `p-${Date.now()}`,
+        name: playerName,
+        nationality: nat,
+        position: posLabel,
+        age: 17,
+        overall,
+        potential,
+        specialSkill: skill,
+      };
+
+      updateUserEconomy(-costCoins, -costGems);
+      setScoutedRoster([newPlayer, ...scoutedRoster]);
+      setMessage(`สำเร็จ! ปั้นเยาวชนใหม่: ${newPlayer.name} (เรตติ้ง ${newPlayer.overall}, ศักยภาพ ${newPlayer.potential})`);
+    } catch {
+      // Local fallback
+      const newPlayer: ScoutedPlayer = {
+        id: `p-${Date.now()}`,
+        name: playerName,
+        nationality: nat,
+        position: posLabel,
+        age: 17,
+        overall,
+        potential,
+        specialSkill: skill,
+      };
+      updateUserEconomy(-costCoins, -costGems);
+      setScoutedRoster([newPlayer, ...scoutedRoster]);
+      setMessage(`สำเร็จ! ปั้นเยาวชนใหม่: ${newPlayer.name} (เรตติ้ง ${newPlayer.overall}, ศักยภาพ ${newPlayer.potential})`);
+    } finally {
+      setLoadingAction(false);
+    }
   };
 
-  const handleCreateNamedPlayer = () => {
-    if (!user) return;
+  const handleCreateNamedPlayer = async () => {
+    if (!user || loadingAction) return;
     if (user.gems < 80) {
       setMessage("เพชรไม่เพียงพอ (ต้องการ 80 เพชร)");
       return;
@@ -120,21 +182,62 @@ export default function YouthAcademyPage() {
       return;
     }
 
-    updateUserEconomy(0, -80);
+    setLoadingAction(true);
+    const playerName = `${customFirstName.trim()} ${customLastName.trim()}`;
+    const nat = selectedNationality === "สุ่มสัญชาติ" ? "ไทย" : selectedNationality;
+    const posLabel = POSITIONS.find(p => p.id === selectedPosition)?.label || "ตัวกลาง";
+    const skill = "ทักษะการเล่นระดับสูง (Master Skill)";
 
-    const newPlayer: ScoutedPlayer = {
-      id: `p-${Date.now()}`,
-      name: `${customFirstName.trim()} ${customLastName.trim()}`,
-      nationality: selectedNationality === "สุ่มสัญชาติ" ? "ไทย" : selectedNationality,
-      position: POSITIONS.find(p => p.id === selectedPosition)?.label || "ตัวกลาง",
-      age: 16,
-      overall: 82,
-      potential: 95,
-      specialSkill: "ทักษะการเล่นระดับสูง (Master Skill)"
-    };
+    try {
+      const res = await fetch("/api/scout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          name: playerName,
+          nationality: nat,
+          position: posLabel,
+          age: 16,
+          overall: 82,
+          potential: 95,
+          specialSkill: skill,
+          costCoins: 0,
+          costGems: 80,
+        }),
+      });
 
-    setScoutedRoster([newPlayer, ...scoutedRoster]);
-    setMessage(`สำเร็จ! เพิ่มดาวรุ่ง ${newPlayer.name} เข้าสู่อคาเดมี่แล้ว`);
+      const data = await res.json();
+      const newPlayer: ScoutedPlayer = {
+        id: data?.player?.id || `p-${Date.now()}`,
+        name: playerName,
+        nationality: nat,
+        position: posLabel,
+        age: 16,
+        overall: 82,
+        potential: 95,
+        specialSkill: skill,
+      };
+
+      updateUserEconomy(0, -80);
+      setScoutedRoster([newPlayer, ...scoutedRoster]);
+      setMessage(`สำเร็จ! เพิ่มดาวรุ่ง ${newPlayer.name} เข้าสู่อคาเดมี่แล้ว`);
+    } catch {
+      const newPlayer: ScoutedPlayer = {
+        id: `p-${Date.now()}`,
+        name: playerName,
+        nationality: nat,
+        position: posLabel,
+        age: 16,
+        overall: 82,
+        potential: 95,
+        specialSkill: skill,
+      };
+      updateUserEconomy(0, -80);
+      setScoutedRoster([newPlayer, ...scoutedRoster]);
+      setMessage(`สำเร็จ! เพิ่มดาวรุ่ง ${newPlayer.name} เข้าสู่อคาเดมี่แล้ว`);
+    } finally {
+      setLoadingAction(false);
+    }
   };
 
   return (
@@ -265,7 +368,8 @@ export default function YouthAcademyPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => handleScoutPlayer(false)}
-              className="notion-btn-primary px-4 py-2 text-xs"
+              disabled={loadingAction}
+              className="notion-btn-primary px-4 py-2 text-xs disabled:opacity-50"
             >
               <Gem className="w-3.5 h-3.5" />
               <span>40 เพชร</span>
@@ -273,7 +377,8 @@ export default function YouthAcademyPage() {
 
             <button
               onClick={() => handleScoutPlayer(true)}
-              className="notion-btn-secondary px-4 py-2 text-xs"
+              disabled={loadingAction}
+              className="notion-btn-secondary px-4 py-2 text-xs disabled:opacity-50"
             >
               <Coins className="w-3.5 h-3.5 text-[#787774]" />
               <span>20,000 + 20 เพชร</span>
@@ -324,7 +429,8 @@ export default function YouthAcademyPage() {
             <span className="text-[11px] text-[#9b9a97]">ใช้ตัวอักษร A-Z เท่านั้น</span>
             <button
               onClick={handleCreateNamedPlayer}
-              className="notion-btn-primary px-4 py-2 text-xs"
+              disabled={loadingAction}
+              className="notion-btn-primary px-4 py-2 text-xs disabled:opacity-50"
             >
               <Gem className="w-3.5 h-3.5" />
               <span>80 เพชร</span>

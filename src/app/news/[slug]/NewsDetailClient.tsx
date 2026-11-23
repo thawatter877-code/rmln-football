@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { 
@@ -12,10 +12,9 @@ import {
   MessageSquare, 
   ThumbsUp, 
   ArrowLeft,
-  Send,
-  Heart
+  Send
 } from "lucide-react";
-import { MOCK_NEWS, NewsComment } from "@/data/mockNews";
+import { MOCK_NEWS, NewsArticle, NewsComment } from "@/data/mockNews";
 import { useAuth } from "@/context/AuthContext";
 
 export default function NewsDetailClient() {
@@ -23,13 +22,50 @@ export default function NewsDetailClient() {
   const slug = params?.slug as string;
   const { user } = useAuth();
 
-  const article = MOCK_NEWS.find((n) => n.slug === slug) || MOCK_NEWS[0];
-
+  const [article, setArticle] = useState<NewsArticle>(
+    MOCK_NEWS.find((n) => n.slug === slug) || MOCK_NEWS[0]
+  );
   const [reactions, setReactions] = useState(article.reactions);
   const [reacted, setReacted] = useState<string | null>(null);
   const [comments, setComments] = useState<NewsComment[]>(article.comments);
   const [commentInput, setCommentInput] = useState("");
   const [copied, setCopied] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  // Fetch real comments and real article stats from Cloudflare D1
+  useEffect(() => {
+    // 1. Fetch real article from D1
+    fetch(`/api/news?slug=${encodeURIComponent(slug)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.article) {
+          setArticle((prev) => ({
+            ...prev,
+            views: data.article.views || prev.views,
+          }));
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch real comments from D1
+    fetch(`/api/comments?newsId=${encodeURIComponent(article.id)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.comments && Array.isArray(data.comments) && data.comments.length > 0) {
+          const mapped: NewsComment[] = data.comments.map((c: any) => ({
+            id: c.id,
+            userId: c.user_id,
+            userName: c.user_name,
+            userClub: c.user_club || "Arsenal",
+            content: c.content,
+            likesCount: c.likes_count || 0,
+            createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString("th-TH") : "เมื่อสักครู่",
+          }));
+          setComments(mapped);
+        }
+      })
+      .catch(() => {});
+  }, [slug, article.id]);
 
   const handleReaction = (type: "fire" | "magic" | "clap") => {
     if (reacted === type) return;
@@ -40,22 +76,55 @@ export default function NewsDetailClient() {
     setReacted(type);
   };
 
-  const handlePostComment = (e: React.FormEvent) => {
+  const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentInput.trim() || !user) return;
+    if (!commentInput.trim() || !user || submittingComment) return;
 
-    const newComment: NewsComment = {
-      id: `c-${Date.now()}`,
-      userId: user.id,
-      userName: user.displayName,
-      userClub: user.favoriteClub,
-      content: commentInput.trim(),
-      likesCount: 0,
-      createdAt: "เมื่อสักครู่",
-    };
+    setSubmittingComment(true);
+    const content = commentInput.trim();
 
-    setComments([newComment, ...comments]);
-    setCommentInput("");
+    try {
+      const res = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newsId: article.id,
+          userId: user.id,
+          userName: user.displayName,
+          userClub: user.favoriteClub,
+          content,
+        }),
+      });
+
+      const data = await res.json();
+      const newComment: NewsComment = {
+        id: data?.comment?.id || `c-${Date.now()}`,
+        userId: user.id,
+        userName: user.displayName,
+        userClub: user.favoriteClub,
+        content,
+        likesCount: 0,
+        createdAt: "เมื่อสักครู่",
+      };
+
+      setComments([newComment, ...comments]);
+      setCommentInput("");
+    } catch {
+      // Local fallback
+      const newComment: NewsComment = {
+        id: `c-${Date.now()}`,
+        userId: user.id,
+        userName: user.displayName,
+        userClub: user.favoriteClub,
+        content,
+        likesCount: 0,
+        createdAt: "เมื่อสักครู่",
+      };
+      setComments([newComment, ...comments]);
+      setCommentInput("");
+    } finally {
+      setSubmittingComment(false);
+    }
   };
 
   const handleShare = () => {
@@ -132,7 +201,7 @@ export default function NewsDetailClient() {
           {article.content}
         </div>
 
-        {/* REACTIONS (Notion Minimalist Buttons with Lucide Icons) */}
+        {/* REACTIONS */}
         <div className="notion-card p-4 text-center space-y-2.5">
           <h3 className="text-xs font-semibold text-[#787774]">
             ปฏิกิริยาต่อรายงานนี้
@@ -176,7 +245,7 @@ export default function NewsDetailClient() {
           </div>
         </div>
 
-        {/* COMMENTS SECTION */}
+        {/* COMMENTS SECTION (Connected to real D1 database) */}
         <section className="space-y-4 pt-4 border-t border-[#e9e9e7]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -206,11 +275,11 @@ export default function NewsDetailClient() {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  disabled={!commentInput.trim()}
+                  disabled={!commentInput.trim() || submittingComment}
                   className="notion-btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
                 >
                   <Send className="w-3 h-3" />
-                  <span>ส่งข้อความ</span>
+                  <span>{submittingComment ? "กำลังบันทึก..." : "ส่งข้อความ"}</span>
                 </button>
               </div>
             </form>

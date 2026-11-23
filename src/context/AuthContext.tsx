@@ -17,23 +17,23 @@ export interface RmlnUser {
 
 interface AuthContextType {
   user: RmlnUser | null;
-  login: (emailOrUser: string, pass: string) => Promise<boolean>;
-  register: (username: string, email: string, pass: string, club: string) => Promise<boolean>;
+  login: (emailOrUser: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, email: string, pass: string, club: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateUserEconomy: (deltaCoins: number, deltaGems: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  login: async () => false,
-  register: async () => false,
+  login: async () => ({ success: false }),
+  register: async () => ({ success: false }),
   logout: () => {},
   updateUserEconomy: () => {},
 });
 
 const DEFAULT_DEMO_USER: RmlnUser = {
   id: "rmln-user-1",
-  username: "magic_fan",
+  username: "football_fan",
   email: "fan@rmln.football",
   displayName: "Somchai Magician",
   favoriteClub: "Arsenal",
@@ -56,40 +56,99 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(DEFAULT_DEMO_USER);
       }
     } else {
-      // Default initial logged in user so user can test immediately
       setUser(DEFAULT_DEMO_USER);
       localStorage.setItem("rmln_user", JSON.stringify(DEFAULT_DEMO_USER));
     }
   }, []);
 
-  const login = async (emailOrUser: string, _pass: string) => {
-    const newUser: RmlnUser = {
-      ...DEFAULT_DEMO_USER,
-      username: emailOrUser.split("@")[0],
-      email: emailOrUser.includes("@") ? emailOrUser : `${emailOrUser}@rmln.football`,
-      displayName: emailOrUser.split("@")[0],
-    };
-    setUser(newUser);
-    localStorage.setItem("rmln_user", JSON.stringify(newUser));
-    return true;
+  const login = async (emailOrUser: string, pass: string) => {
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", username: emailOrUser, password: pass }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.user) {
+        const u = data.user;
+        const loggedUser: RmlnUser = {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          displayName: u.display_name || u.username,
+          favoriteClub: u.favorite_club || "Arsenal",
+          coins: u.coins ?? 198000,
+          gems: u.gems ?? 282,
+          academyLevel: u.academy_level || "D4",
+          squadCount: u.squad_count ?? 23,
+          maxSquad: u.max_squad ?? 50,
+        };
+        setUser(loggedUser);
+        localStorage.setItem("rmln_user", JSON.stringify(loggedUser));
+        return { success: true };
+      }
+      return { success: false, error: data?.error || "เข้าสู่ระบบไม่สำเร็จ" };
+    } catch {
+      // Local fallback
+      const newUser: RmlnUser = {
+        ...DEFAULT_DEMO_USER,
+        username: emailOrUser.split("@")[0],
+        email: emailOrUser.includes("@") ? emailOrUser : `${emailOrUser}@rmln.football`,
+        displayName: emailOrUser.split("@")[0],
+      };
+      setUser(newUser);
+      localStorage.setItem("rmln_user", JSON.stringify(newUser));
+      return { success: true };
+    }
   };
 
-  const register = async (username: string, email: string, _pass: string, club: string) => {
-    const newUser: RmlnUser = {
-      id: `user-${Date.now()}`,
-      username,
-      email,
-      displayName: username,
-      favoriteClub: club || "Arsenal",
-      coins: 198000,
-      gems: 282,
-      academyLevel: "D4",
-      squadCount: 23,
-      maxSquad: 50,
-    };
-    setUser(newUser);
-    localStorage.setItem("rmln_user", JSON.stringify(newUser));
-    return true;
+  const register = async (username: string, email: string, pass: string, club: string) => {
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "register", username, email, password: pass, favoriteClub: club }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.user) {
+        const u = data.user;
+        const newUser: RmlnUser = {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          displayName: u.display_name || u.username,
+          favoriteClub: u.favorite_club || club || "Arsenal",
+          coins: u.coins ?? 198000,
+          gems: u.gems ?? 282,
+          academyLevel: u.academy_level || "D4",
+          squadCount: u.squad_count ?? 23,
+          maxSquad: u.max_squad ?? 50,
+        };
+        setUser(newUser);
+        localStorage.setItem("rmln_user", JSON.stringify(newUser));
+        return { success: true };
+      }
+      return { success: false, error: data?.error || "สมัครสมาชิกไม่สำเร็จ" };
+    } catch {
+      // Local fallback
+      const newUser: RmlnUser = {
+        id: `user-${Date.now()}`,
+        username,
+        email,
+        displayName: username,
+        favoriteClub: club || "Arsenal",
+        coins: 198000,
+        gems: 282,
+        academyLevel: "D4",
+        squadCount: 23,
+        maxSquad: 50,
+      };
+      setUser(newUser);
+      localStorage.setItem("rmln_user", JSON.stringify(newUser));
+      return { success: true };
+    }
   };
 
   const logout = () => {
