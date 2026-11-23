@@ -149,6 +149,18 @@ export async function ensureRmlnSchema(db: any) {
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_rmln_comments_news ON rmln_comments(news_id)").run().catch(() => {});
     await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_rmln_reactions_user ON rmln_reactions(news_id, user_id)").run().catch(() => {});
 
+    // 8. One-time cleanup: remove the made-up sample articles an old version seeded automatically
+    //    (ids news-1..news-3, never created by a real user). Their comments/reactions go too.
+    const fakeIds = ["news-1", "news-2", "news-3"];
+    for (const id of fakeIds) {
+      const row = await db.prepare("SELECT created_by FROM rmln_news WHERE id = ?").bind(id).first().catch(() => null);
+      if (row && !row.created_by) {
+        await db.prepare("DELETE FROM rmln_comments WHERE news_id = ?").bind(id).run().catch(() => {});
+        await db.prepare("DELETE FROM rmln_reactions WHERE news_id = ?").bind(id).run().catch(() => {});
+        await db.prepare("DELETE FROM rmln_news WHERE id = ?").bind(id).run().catch(() => {});
+      }
+    }
+
     schemaInitialized = true;
   } catch (err: any) {
     console.error("Schema error:", err.message);
