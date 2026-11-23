@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #080c14;
+    --bg-surface: #0f1624;
+    --bg-subtle: #151e30;
+    --bg-card: #121929;
+    --border-gold: rgba(212, 175, 55, 0.35);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --gold: #d4af37;
+    --gold-bright: #fbbf24;
+    --gold-glow: rgba(212, 175, 55, 0.25);
+    --neon-cyan: #06b6d4;
+    --neon-emerald: #10b981;
+    --neon-red: #ef4444;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+  }
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+  overflow-x: hidden;
+}
+
+/* Ornate Fantasy / Gold Border matching youth academy screenshot */
+.magic-frame {
+  position: relative;
+  border: 1px solid var(--border-gold);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(19, 27, 46, 0.95) 0%, rgba(13, 19, 32, 0.98) 100%);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 12px var(--gold-glow);
+}
+
+.magic-frame::before,
+.magic-frame::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: var(--gold-bright);
+  pointer-events: none;
+}
+
+.magic-frame::before {
+  top: -2px;
+  left: -2px;
+  border-top: 2px solid var(--gold-bright);
+  border-left: 2px solid var(--gold-bright);
+}
+
+.magic-frame::after {
+  bottom: -2px;
+  right: -2px;
+  border-bottom: 2px solid var(--gold-bright);
+  border-right: 2px solid var(--gold-bright);
+}
+
+/* Gold glow button */
+.btn-gold {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #000;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 15px rgba(234, 179, 8, 0.35);
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, #facc15 0%, #d97706 100%);
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.55);
+  transform: translateY(-1px);
+}
+
+/* Diamond / Gem Pill */
+.gem-pill {
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #67e8f9;
+}
+
+/* Coin Pill */
+.coin-pill {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fcd34d;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
