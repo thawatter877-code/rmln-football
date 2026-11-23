@@ -1,59 +1,156 @@
-import { ensureRmlnSchema } from "../_lib/db";
+import { ensureRmlnSchema, requireDb } from "../_lib/db";
+import { Env, json, getSessionUser } from "../_lib/auth";
 
-interface Env {
-  DB?: any;
+const CATEGORIES: Record<string, string> = {
+  breaking: "ข่าวด่วน",
+  transfer: "ตลาดซื้อขาย",
+  match_report: "รายงานการแข่งขัน",
+  analysis: "บทวิเคราะห์",
+  feature: "สกู๊ปพิเศษ",
+};
+
+function slugify(text: string): string {
+  const base = text
+    .toLowerCase()
+    .normalize("NFC")
+    // keep Thai characters, latin letters, digits, spaces and dashes
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 60);
+  return base || "news";
 }
 
+function estimateReadTime(content: string): string {
+  const minutes = Math.max(1, Math.round(content.length / 900));
+  return `${minutes} นาที`;
+}
+
+async function requireAdmin(request: Request, env: Env): Promise<Response | null> {
+  const session = await getSessionUser(request, env);
+  if (!session) return json({ error: "กรุณาเข้าสู่ระบบ" }, 401);
+  if (session.role !== "admin") return json({ error: "เฉพาะผู้ดูแลระบบเท่านั้น" }, 403);
+  return null;
+}
+
+// GET /api/news?slug=... | ?category=... | ?league=...
 export const onRequestGet = async ({ env, request }: { env: Env; request: Request }) => {
+  const missing = requireDb(env);
+  if (missing) return missing;
+
   const url = new URL(request.url);
   const slug = url.searchParams.get("slug");
   const category = url.searchParams.get("category");
   const league = url.searchParams.get("league");
 
   try {
-    if (env.DB) {
-      await ensureRmlnSchema(env.DB);
+    await ensureRmlnSchema(env.DB);
 
-      if (slug) {
-        const article = await env.DB.prepare("SELECT * FROM rmln_news WHERE slug = ? OR id = ?").bind(slug, slug).first();
-        if (!article) {
-          return new Response(JSON.stringify({ error: "Article not found" }), { status: 404 });
-        }
-        // Increment views
-        await env.DB.prepare("UPDATE rmln_news SET views = views + 1 WHERE id = ?").bind(article.id).run().catch(() => {});
-        return new Response(JSON.stringify({ article }), {
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      let query = "SELECT * FROM rmln_news";
-      const params: any[] = [];
-
-      if (category && category !== "all") {
-        query += " WHERE category = ?";
-        params.push(category);
-      } else if (league && league !== "all") {
-        query += " WHERE league LIKE ?";
-        params.push(`%${league}%`);
-      }
-
-      query += " ORDER BY created_at DESC LIMIT 50";
-
-      const stmt = params.length > 0 ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
-      const { results } = await stmt.all();
-
-      return new Response(JSON.stringify({ news: results || [] }), {
-        headers: { "Content-Type": "application/json" },
-      });
+    if (slug) {
+      const article = await env.DB.prepare("SELECT * FROM rmln_news WHERE slug = ? OR id = ?").bind(slug, slug).first();
+      if (!article) return json({ error: "Article not found" }, 404);
+      await env.DB.prepare("UPDATE rmln_news SET views = views + 1 WHERE id = ?").bind(article.id).run().catch(() => {});
+      return json({ article: { ...article, views: (article.views || 0) + 1 } });
     }
 
-    return new Response(JSON.stringify({ news: [] }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    let query = "SELECT * FROM rmln_news";
+    const params: string[] = [];
+    if (category && category !== "all") {
+      query += " WHERE category = ?";
+      params.push(category);
+    } else if (league && league !== "all") {
+      query += " WHERE league LIKE ?";
+      params.push(`%${league}%`);
+    }
+    query += " ORDER BY COALESCE(published_at, created_at) DESC LIMIT 50";
+
+    const stmt = params.length ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
+    const { results } = await stmt.all();
+    return json({ news: results || [] }, 200, { "Cache-Control": "public, max-age=30" });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return json({ error: err.message }, 500);
+  }
+};
+
+// POST /api/news (admin only) -> create article
+export const onRequestPost = async ({ env, request }: { env: Env; request: Request }) => {
+  const missing = requireDb(env);
+  if (missing) return missing;
+
+  try {
+    await ensureRmlnSchema(env.DB);
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+
+    const body: any = await request.json().catch(() => ({}));
+    const title = String(body.title || "").trim();
+    const content = String(body.content || "").trim();
+    if (!title || !content) return json({ error: "กรุณากรอกหัวข้อและเนื้อหาข่าว" }, 400);
+    if (title.length > 300) return json({ error: "หัวข้อข่าวยาวเกินไป" }, 400);
+
+    const category = CATEGORIES[body.category] ? body.category : "breaking";
+    const imageUrl = String(body.imageUrl || "").trim();
+    if (imageUrl && !/^https:\/\//i.test(imageUrl)) return json({ error: "ลิงก์รูปภาพต้องขึ้นต้นด้วย https://" }, 400);
+
+    // Make the slug unique
+    const baseSlug = slugify(title);
+    let slug = baseSlug;
+    for (let i = 2; await env.DB.prepare("SELECT 1 FROM rmln_news WHERE slug = ?").bind(slug).first(); i++) {
+      slug = `${baseSlug}-${i}`;
+    }
+
+    const id = `n-${crypto.randomUUID()}`;
+    await env.DB.prepare(
+      `INSERT INTO rmln_news
+       (id, slug, title, excerpt, content, category, category_label, league, club, image_url, views, author, is_breaking, is_featured, published_at, read_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        id,
+        slug,
+        title,
+        String(body.excerpt || "").trim() || title,
+        content,
+        category,
+        CATEGORIES[category],
+        String(body.league || "").trim() || null,
+        String(body.club || "").trim() || null,
+        imageUrl || null,
+        String(body.author || "").trim() || "กองบรรณาธิการ RMLN",
+        body.isBreaking ? 1 : 0,
+        body.isFeatured ? 1 : 0,
+        new Date().toISOString(),
+        estimateReadTime(content)
+      )
+      .run();
+
+    const article = await env.DB.prepare("SELECT * FROM rmln_news WHERE id = ?").bind(id).first();
+    return json({ success: true, article }, 201);
+  } catch (err: any) {
+    return json({ error: err.message }, 500);
+  }
+};
+
+// DELETE /api/news?id=... (admin only)
+export const onRequestDelete = async ({ env, request }: { env: Env; request: Request }) => {
+  const missing = requireDb(env);
+  if (missing) return missing;
+
+  try {
+    await ensureRmlnSchema(env.DB);
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+
+    const id = new URL(request.url).searchParams.get("id");
+    if (!id) return json({ error: "Missing id" }, 400);
+
+    await env.DB.prepare("DELETE FROM rmln_comments WHERE news_id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM rmln_reactions WHERE news_id = ?").bind(id).run();
+    const res = await env.DB.prepare("DELETE FROM rmln_news WHERE id = ?").bind(id).run();
+    if (!res.meta?.changes) return json({ error: "Article not found" }, 404);
+    return json({ success: true });
+  } catch (err: any) {
+    return json({ error: err.message }, 500);
   }
 };

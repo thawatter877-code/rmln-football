@@ -19,53 +19,47 @@ import {
   Radio,
   ExternalLink
 } from "lucide-react";
-import { MOCK_NEWS, MOCK_FIXTURES, NewsArticle } from "@/data/mockNews";
+import { loadNewsFeed, articleHref, timeAgo, matchesFilter, NewsArticle, FALLBACK_IMAGE, handleImgError } from "@/lib/news";
 
 export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [newsList, setNewsList] = useState<NewsArticle[]>(MOCK_NEWS);
-  const [isLiveActive, setIsLiveActive] = useState(false);
+  const [newsList, setNewsList] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [liveCount, setLiveCount] = useState(0);
+  const [errors, setErrors] = useState<string[]>([]);
 
-  // Fetch real-time live football feed from Cloudflare Functions API
   useEffect(() => {
-    fetch("/api/live-news")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.success && data?.liveNews && data.liveNews.length > 0) {
-          const liveMapped: NewsArticle[] = data.liveNews.map((item: any) => ({
-            id: item.id,
-            slug: item.slug,
-            title: item.title,
-            excerpt: item.excerpt,
-            content: item.content,
-            category: item.category as any,
-            categoryLabel: item.categoryLabel,
-            league: item.league,
-            club: item.sourceName || "Sky Sports / BBC",
-            imageUrl: item.imageUrl,
-            views: item.views || 2500,
-            author: item.author || "Sky Sports",
-            isBreaking: true,
-            isFeatured: false,
-            publishedAt: item.publishedAt || "เมื่อสักครู่",
-            readTime: item.readTime || "2 นาที",
-            reactions: { fire: 120, magic: 240, clap: 80 },
-            comments: []
-          }));
-
-          // Merge live news with analytical articles
-          setNewsList([...liveMapped.slice(0, 5), ...MOCK_NEWS]);
-          setIsLiveActive(true);
-        }
+    loadNewsFeed()
+      .then((feed) => {
+        setNewsList(feed.articles);
+        setLiveCount(feed.liveCount);
+        setErrors(feed.errors);
       })
-      .catch(() => {});
+      .finally(() => setLoading(false));
   }, []);
 
-  const featuredNews = newsList[0] || MOCK_NEWS[0];
+  // Prefer an editor-marked featured story, otherwise the newest article
+  const featuredNews = newsList.find((n) => n.isFeatured) || newsList[0];
+  const isLiveActive = liveCount > 0;
 
-  const filteredNews = selectedCategory === "all" 
-    ? newsList 
-    : newsList.filter(n => n.category === selectedCategory || n.league.toLowerCase().includes(selectedCategory.toLowerCase()));
+  const filteredNews = newsList.filter((n) => n !== featuredNews && matchesFilter(n, selectedCategory));
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-sm text-[#9b9a97]">กำลังโหลดข่าว...</div>
+    );
+  }
+
+  if (!featuredNews) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2 text-center px-4">
+        <p className="text-sm font-semibold text-[#2f3437]">ยังไม่มีข่าวให้แสดง</p>
+        {errors.map((e) => (
+          <p key={e} className="text-xs text-red-600">{e}</p>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-[#2f3437]">
@@ -80,7 +74,7 @@ export default function HomePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="notion-tag text-[#2f3437] font-semibold bg-[#f1f1ef]">
                   <Activity className="w-3 h-3 text-[#2f3437]" />
-                  {isLiveActive ? "LIVE FEED ข่าวสดเรียลไทม์" : "รายงานพิเศษ"}
+                  {featuredNews.isLive ? `ข่าวจาก ${featuredNews.sourceName}` : "รายงานพิเศษ RMLN"}
                 </span>
                 <span className="notion-tag font-mono text-[#787774]">
                   {featuredNews.league}
@@ -93,7 +87,7 @@ export default function HomePage() {
                 )}
               </div>
 
-              <Link href={`/news/${featuredNews.slug}`} className="group block">
+              <Link href={articleHref(featuredNews)} className="group block">
                 <h1 className="text-2xl sm:text-4xl lg:text-[40px] font-bold text-[#2f3437] group-hover:text-black transition-colors leading-[1.25] tracking-tight">
                   {featuredNews.title}
                 </h1>
@@ -106,16 +100,18 @@ export default function HomePage() {
               <div className="flex flex-wrap items-center gap-3 text-xs text-[#9b9a97] pt-2 border-t border-[#e9e9e7]">
                 <span className="text-[#37352f] font-medium">{featuredNews.author}</span>
                 <span>•</span>
-                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {featuredNews.publishedAt}</span>
-                <span>•</span>
-                <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {featuredNews.views.toLocaleString()} ครั้ง</span>
-                <span>•</span>
-                <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> {featuredNews.comments?.length || 0} ความคิดเห็น</span>
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {timeAgo(featuredNews.publishedAt)}</span>
+                {!featuredNews.isLive && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {featuredNews.views.toLocaleString()} ครั้ง</span>
+                  </>
+                )}
               </div>
 
               <div className="pt-2">
                 <Link
-                  href={`/news/${featuredNews.slug}`}
+                  href={articleHref(featuredNews)}
                   className="notion-btn-primary px-4 py-2"
                 >
                   <span>อ่านรายงานฉบับเต็ม</span>
@@ -126,16 +122,17 @@ export default function HomePage() {
 
             {/* Right Column: Clean Image Container */}
             <div className="lg:col-span-5">
-              <Link href={`/news/${featuredNews.slug}`} className="group block relative rounded-lg overflow-hidden border border-[#e9e9e7] shadow-xs">
+              <Link href={articleHref(featuredNews)} className="group block relative rounded-lg overflow-hidden border border-[#e9e9e7] shadow-xs">
                 <div className="aspect-[16/10] w-full overflow-hidden bg-[#f1f1ef]">
                   <img
                     src={featuredNews.imageUrl}
+                    onError={handleImgError}
                     alt={featuredNews.title}
                     className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
                   />
                 </div>
                 <div className="p-3 bg-white border-t border-[#e9e9e7] flex items-center justify-between text-xs text-[#787774]">
-                  <span>ภาพประกอบการแข่งขัน</span>
+                  <span>{featuredNews.isLive ? `ภาพ: ${featuredNews.sourceName}` : "ภาพประกอบ"}</span>
                   <span className="font-mono">เวลาอ่าน {featuredNews.readTime}</span>
                 </div>
               </Link>
@@ -192,7 +189,7 @@ export default function HomePage() {
               {filteredNews.map((news) => (
                 <Link
                   key={news.id}
-                  href={`/news/${news.slug}`}
+                  href={articleHref(news)}
                   className="notion-card block p-4 group"
                 >
                   <div className="flex flex-col sm:flex-row gap-4">
@@ -200,6 +197,8 @@ export default function HomePage() {
                     <div className="sm:w-44 aspect-[16/10] rounded-md overflow-hidden shrink-0 bg-[#f1f1ef] border border-[#e9e9e7]">
                       <img
                         src={news.imageUrl}
+                        loading="lazy"
+                        onError={handleImgError}
                         alt={news.title}
                         className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
                       />
@@ -213,7 +212,7 @@ export default function HomePage() {
                           <span>•</span>
                           <span>{news.categoryLabel}</span>
                           <span>•</span>
-                          <span>{news.publishedAt}</span>
+                          <span>{timeAgo(news.publishedAt)}</span>
                         </div>
                         <h2 className="text-base font-semibold text-[#2f3437] group-hover:text-black transition-colors line-clamp-2 leading-snug">
                           {news.title}
@@ -227,12 +226,15 @@ export default function HomePage() {
                       <div className="flex items-center justify-between text-[11px] text-[#9b9a97] pt-2 border-t border-[#f1f1ef]">
                         <span className="font-medium text-[#787774]">{news.author}</span>
                         <div className="flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Eye className="w-3 h-3" /> {news.views.toLocaleString()}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="w-3 h-3" /> {news.comments?.length || 0}
-                          </span>
+                          {news.isLive ? (
+                            <span className="flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3" /> {news.sourceName}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <Eye className="w-3 h-3" /> {news.views.toLocaleString()}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -252,7 +254,7 @@ export default function HomePage() {
                   สุ่มสัญชาติและค้นหาดาวรุ่งเข้าสู่อคาเดมี่ของคุณ
                 </h3>
                 <p className="text-xs text-[#787774]">
-                  สะสมเหรียญและเพชรจากการอ่านบทวิเคราะห์เพื่อนำมาสุ่มนักเตะและจัดทีม
+                  ใช้เหรียญและเพชรสุ่มนักเตะดาวรุ่งเข้าสู่ทีมของคุณ
                 </p>
               </div>
 
@@ -270,75 +272,19 @@ export default function HomePage() {
           {/* RIGHT 4 COLS: SIDEBAR */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* 1. MATCH CENTER */}
-            <div className="notion-card p-4 space-y-3">
-              <div className="flex items-center justify-between border-b border-[#e9e9e7] pb-2.5">
-                <div className="flex items-center gap-1.5">
-                  <Trophy className="w-4 h-4 text-[#787774]" />
-                  <h3 className="text-xs font-semibold text-[#2f3437]">ผลและโปรแกรมการแข่งขัน</h3>
-                </div>
-                <span className="text-[10px] text-[#9b9a97] font-mono">MATCH CENTER</span>
+            {/* SOURCES */}
+            <div className="notion-card p-4 space-y-2.5">
+              <div className="flex items-center gap-1.5 border-b border-[#e9e9e7] pb-2.5">
+                <Radio className="w-4 h-4 text-[#787774]" />
+                <h3 className="text-xs font-semibold text-[#2f3437]">แหล่งข่าว</h3>
               </div>
-
-              <div className="space-y-2">
-                {MOCK_FIXTURES.map((fix) => (
-                  <div key={fix.id} className="p-2.5 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-[#9b9a97]">
-                      <span className="font-medium text-[#787774]">{fix.league}</span>
-                      <span className="font-mono text-[#2f3437] font-medium">
-                        {fix.status}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs font-medium text-[#2f3437] pt-0.5">
-                      <span className="truncate max-w-[90px]">{fix.homeTeam}</span>
-                      <span className="px-2 py-0.2 bg-white border border-[#e9e9e7] rounded text-[11px] font-mono font-semibold">
-                        {fix.homeScore !== null ? `${fix.homeScore} - ${fix.awayScore}` : fix.date}
-                      </span>
-                      <span className="truncate max-w-[90px] text-right">{fix.awayTeam}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. LEAGUE STANDINGS */}
-            <div className="notion-card p-4 space-y-3">
-              <div className="flex items-center justify-between border-b border-[#e9e9e7] pb-2.5">
-                <div className="flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-[#787774]" />
-                  <h3 className="text-xs font-semibold text-[#2f3437]">ตารางคะแนนพรีเมียร์ลีก</h3>
-                </div>
-                <span className="text-[10px] text-[#9b9a97] font-mono">2026/27</span>
-              </div>
-
-              <div className="space-y-1 text-xs font-mono">
-                <div className="grid grid-cols-12 text-[10px] text-[#9b9a97] px-2 py-1 font-sans border-b border-[#f1f1ef]">
-                  <span className="col-span-1">#</span>
-                  <span className="col-span-7">สโมสร</span>
-                  <span className="col-span-2 text-center">แข่ง</span>
-                  <span className="col-span-2 text-right">แต้ม</span>
-                </div>
-                {[
-                  { pos: 1, club: "Liverpool", p: 11, pts: 28 },
-                  { pos: 2, club: "Man City", p: 11, pts: 23 },
-                  { pos: 3, club: "Chelsea", p: 11, pts: 19 },
-                  { pos: 4, club: "Arsenal", p: 11, pts: 19 },
-                  { pos: 5, club: "Nott'm Forest", p: 11, pts: 19 },
-                ].map((row) => (
-                  <div
-                    key={row.pos}
-                    className={`grid grid-cols-12 px-2 py-1.5 rounded items-center ${
-                      row.pos <= 4 ? "bg-[#fbfbfa]" : "bg-transparent"
-                    }`}
-                  >
-                    <span className="col-span-1 text-[#9b9a97] font-medium">{row.pos}</span>
-                    <span className="col-span-7 font-sans font-medium text-[#2f3437] truncate">{row.club}</span>
-                    <span className="col-span-2 text-center text-[#787774]">{row.p}</span>
-                    <span className="col-span-2 text-right text-[#2f3437] font-bold">{row.pts}</span>
-                  </div>
-                ))}
-              </div>
+              <ul className="text-xs text-[#787774] space-y-1.5">
+                <li>กองบรรณาธิการ RMLN: {newsList.filter((n) => !n.isLive).length} ข่าว</li>
+                <li>Sky Sports / BBC Sport (RSS): {liveCount} ข่าว</li>
+              </ul>
+              {errors.map((e) => (
+                <p key={e} className="text-[11px] text-red-600">{e}</p>
+              ))}
             </div>
 
             {/* 3. SIGN UP CALLOUT */}

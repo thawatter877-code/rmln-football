@@ -38,37 +38,38 @@ export const onRequestGet = async () => {
         const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
 
         for (const item of itemMatches.slice(0, 8)) {
-          const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/);
-          const descMatch = item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) || item.match(/<description>(.*?)<\/description>/);
+          const titleMatch = item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/);
+          const descMatch = item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) || item.match(/<description>([\s\S]*?)<\/description>/);
           const linkMatch = item.match(/<link>(.*?)<\/link>/);
           const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
           const imgMatch = item.match(/<media:thumbnail[^>]+url="([^"]+)"/) || item.match(/url="([^"]+)"/);
 
-          const title = titleMatch ? titleMatch[1].trim() : "";
-          const desc = descMatch ? descMatch[1].replace(/<[^>]*>/g, "").trim() : "";
-          const link = linkMatch ? linkMatch[1].trim() : "";
+          const title = titleMatch ? decodeEntities(titleMatch[1].trim()) : "";
+          const desc = descMatch ? decodeEntities(descMatch[1].replace(/<[^>]*>/g, "").trim()) : "";
+          const link = linkMatch ? linkMatch[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim() : "";
           const dateStr = dateMatch ? dateMatch[1].trim() : "";
-          const img = imgMatch ? imgMatch[1].trim() : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80";
+          const img = imgMatch ? decodeEntities(imgMatch[1].trim()) : "";
 
           if (title && link) {
-            const timeAgo = formatTimeAgo(dateStr);
-            const slug = slugify(title);
+            const parsed = new Date(dateStr);
+            const publishedIso = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+            const slug = `live-${await shortHash(link)}`;
 
             results.push({
-              id: `live-${slug.slice(0, 30)}`,
+              id: slug,
               slug,
               title,
               excerpt: desc,
-              content: `${desc}\n\nรายงานสดส่งตรงจาก ${feed.name} ติดตามความคืบหน้าอย่างเป็นทางการได้ที่ลิงก์ต้นทาง: ${link}`,
+              content: desc,
               category: title.toLowerCase().includes("transfer") ? "transfer" : "breaking",
-              categoryLabel: feed.name.includes("Premier") ? "พรีเมียร์ลีก สด" : "ฟุตบอลโลก สด",
+              categoryLabel: feed.name.includes("Premier") ? "พรีเมียร์ลีก" : "ฟุตบอลต่างประเทศ",
               league: feed.name.includes("Premier") ? "Premier League" : "World Football",
               imageUrl: img,
-              views: Math.floor(Math.random() * 5000) + 1200,
+              views: 0,
               author: feed.name,
               sourceUrl: link,
               sourceName: feed.name,
-              publishedAt: timeAgo,
+              publishedAt: publishedIso,
               readTime: "2 นาที",
             });
           }
@@ -77,6 +78,8 @@ export const onRequestGet = async () => {
         // Continue to next feed if one fails
       }
     }
+
+    results.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 
     return new Response(JSON.stringify({ success: true, count: results.length, liveNews: results }), {
       headers: {
@@ -89,25 +92,20 @@ export const onRequestGet = async () => {
   }
 };
 
-function formatTimeAgo(dateString: string): string {
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "วันนี้";
-    const diffMin = Math.floor((Date.now() - d.getTime()) / (1000 * 60));
-    if (diffMin < 60) return `${Math.max(1, diffMin)} นาทีที่แล้ว`;
-    const diffHours = Math.floor(diffMin / 60);
-    if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`;
-    return `${Math.floor(diffHours / 24)} วันที่แล้ว`;
-  } catch {
-    return "วันนี้";
-  }
+async function shortHash(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf).slice(0, 8))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-function slugify(text: string): string {
+function decodeEntities(text: string): string {
   return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 60);
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 }

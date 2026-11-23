@@ -12,14 +12,17 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) return;
+    if (!username.trim() || !password) return;
     setLoading(true);
-    await login(username, password);
+    setError(null);
+    const result = await login(username.trim(), password);
     setLoading(false);
-    router.push("/");
+    if (result.success) router.push("/");
+    else setError(result.error || "เข้าสู่ระบบไม่สำเร็จ");
   };
 
   return (
@@ -41,6 +44,11 @@ export default function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {error && (
+            <div role="alert" className="p-2.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
+              {error}
+            </div>
+          )}
           <div>
             <label className="text-xs font-medium text-[#2f3437] block mb-1">
               ชื่อผู้ใช้ หรือ อีเมล

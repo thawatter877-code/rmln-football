@@ -1,0 +1,160 @@
+// Shared news types + data loading (D1 articles via /api/news and RSS via /api/live-news)
+
+export interface NewsArticle {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  categoryLabel: string;
+  league: string;
+  club: string;
+  imageUrl: string;
+  views: number;
+  author: string;
+  isBreaking: boolean;
+  isFeatured: boolean;
+  publishedAt: string; // ISO timestamp
+  readTime: string;
+  /** Set for articles that come from an external RSS feed */
+  sourceUrl?: string;
+  sourceName?: string;
+  isLive: boolean;
+}
+
+export interface NewsComment {
+  id: string;
+  userId: string;
+  userName: string;
+  userClub: string;
+  content: string;
+  createdAt: string;
+}
+
+export const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80";
+
+export function articleHref(a: Pick<NewsArticle, "slug">): string {
+  return `/news/view?slug=${encodeURIComponent(a.slug)}`;
+}
+
+export function mapDbArticle(row: any): NewsArticle {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    excerpt: row.excerpt || "",
+    content: row.content || "",
+    category: row.category || "breaking",
+    categoryLabel: row.category_label || "ข่าว",
+    league: row.league || "",
+    club: row.club || "",
+    imageUrl: row.image_url || FALLBACK_IMAGE,
+    views: row.views || 0,
+    author: row.author || "กองบรรณาธิการ RMLN",
+    isBreaking: !!row.is_breaking,
+    isFeatured: !!row.is_featured,
+    publishedAt: toIso(row.published_at || row.created_at),
+    readTime: row.read_time || "3 นาที",
+    isLive: false,
+  };
+}
+
+export function mapLiveArticle(item: any): NewsArticle {
+  return {
+    id: item.id,
+    slug: item.slug,
+    title: item.title,
+    excerpt: item.excerpt || "",
+    content: item.content || item.excerpt || "",
+    category: item.category || "breaking",
+    categoryLabel: item.categoryLabel || "ข่าวต่างประเทศ",
+    league: item.league || "",
+    club: "",
+    imageUrl: item.imageUrl || FALLBACK_IMAGE,
+    views: 0,
+    author: item.author || item.sourceName || "",
+    isBreaking: false,
+    isFeatured: false,
+    publishedAt: toIso(item.publishedAt),
+    readTime: item.readTime || "2 นาที",
+    sourceUrl: item.sourceUrl,
+    sourceName: item.sourceName,
+    isLive: true,
+  };
+}
+
+/** D1 stores CURRENT_TIMESTAMP as "YYYY-MM-DD HH:MM:SS" (UTC, no zone) */
+function toIso(value: string | undefined | null): string {
+  if (!value) return new Date().toISOString();
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? value.replace(" ", "T") + "Z" : value;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+export function timeAgo(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (diffMin < 1) return "เมื่อสักครู่";
+  if (diffMin < 60) return `${diffMin} นาทีที่แล้ว`;
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return `${h} ชั่วโมงที่แล้ว`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days} วันที่แล้ว`;
+  return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+}
+
+export interface NewsFeed {
+  articles: NewsArticle[]; // newest first: editorial (D1) + live RSS merged
+  editorialCount: number;
+  liveCount: number;
+  errors: string[];
+}
+
+let feedPromise: Promise<NewsFeed> | null = null;
+let feedFetchedAt = 0;
+
+/** Loads all news once per page view (cached for 2 minutes) so Navbar + pages share one request. */
+export function loadNewsFeed(force = false): Promise<NewsFeed> {
+  if (!force && feedPromise && Date.now() - feedFetchedAt < 120_000) return feedPromise;
+  feedFetchedAt = Date.now();
+  feedPromise = (async () => {
+    const errors: string[] = [];
+    const [dbRes, liveRes] = await Promise.allSettled([
+      fetch("/api/news").then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || `ข่าวจากกองบรรณาธิการโหลดไม่สำเร็จ (${r.status})`);
+        return (data.news || []).map(mapDbArticle) as NewsArticle[];
+      }),
+      fetch("/api/live-news").then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data?.success) throw new Error(data?.error || `ข่าวสดโหลดไม่สำเร็จ (${r.status})`);
+        return (data.liveNews || []).map(mapLiveArticle) as NewsArticle[];
+      }),
+    ]);
+
+    const editorial = dbRes.status === "fulfilled" ? dbRes.value : (errors.push(dbRes.reason?.message), []);
+    const live = liveRes.status === "fulfilled" ? liveRes.value : (errors.push(liveRes.reason?.message), []);
+
+    const articles = [...editorial, ...live].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    return { articles, editorialCount: editorial.length, liveCount: live.length, errors };
+  })();
+  return feedPromise;
+}
+
+export function matchesFilter(n: NewsArticle, filter: string): boolean {
+  if (!filter || filter === "all") return true;
+  const f = filter.toLowerCase();
+  if (f === "breaking") return n.isBreaking || n.category === "breaking";
+  return n.category.toLowerCase() === f || n.league.toLowerCase().includes(f);
+}
+
+/** <img onError> handler: swap to the fallback image once (never loops if the fallback also fails) */
+export function handleImgError(e: { currentTarget: HTMLImageElement }) {
+  const img = e.currentTarget;
+  if (img.dataset.fallback) return;
+  img.dataset.fallback = "1";
+  img.src = FALLBACK_IMAGE;
+}

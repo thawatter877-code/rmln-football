@@ -44,13 +44,27 @@
    - Variable name: `DB`
    - D1 Database: เลือก `rmln_football_db`
 
+### 4. ตั้งค่า Environment Variables (จำเป็น)
+ไปที่ **Settings** > **Variables and Secrets** ของโปรเจกต์ Pages (ทั้ง Production และ Preview):
+
+| ชื่อ | ประเภท | ค่า |
+|---|---|---|
+| `JWT_SECRET` | Secret (Encrypt) | สตริงสุ่มยาว 32 ตัวขึ้นไป เช่นผลจาก `openssl rand -hex 32` |
+| `ADMIN_EMAILS` | Text | อีเมลผู้ดูแลระบบ คั่นด้วยจุลภาค เช่น `you@example.com` |
+
+- ถ้าไม่มี `JWT_SECRET` ระบบสมัครสมาชิก/ล็อกอินจะใช้งานไม่ได้
+- บัญชีที่สมัครหรือล็อกอินด้วยอีเมลใน `ADMIN_EMAILS` จะได้สิทธิ์ admin (เข้า `/admin` เพื่อเขียน/ลบข่าว)
+- หลังเปลี่ยนค่าต้อง **Redeploy** ใหม่หนึ่งครั้ง
+
 ---
 
 ## 🛠️ ทดสอบบนเครื่อง Local
 
 ```bash
 npm install
-npm run dev
+npm run build
+printf 'JWT_SECRET=local-dev-secret-change-me-0123456789abcdef\nADMIN_EMAILS=you@example.com\n' > .dev.vars
+npx wrangler pages dev out
 ```
 
-เปิดดูที่ `http://localhost:3000`
+เปิดดูที่ `http://localhost:8788` (ต้องใช้ `wrangler pages dev` เพื่อให้ API และ D1 ทำงาน, `npm run dev` จะเห็นแค่หน้าเว็บโดยไม่มีข้อมูล)

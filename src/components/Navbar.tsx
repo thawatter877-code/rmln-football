@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -20,12 +20,19 @@ import {
   FileText
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { MOCK_FIXTURES } from "@/data/mockNews";
+import { loadNewsFeed, articleHref, timeAgo, NewsArticle } from "@/lib/news";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [latest, setLatest] = useState<NewsArticle[]>([]);
+
+  useEffect(() => {
+    loadNewsFeed()
+      .then((feed) => setLatest(feed.articles.slice(0, 3)))
+      .catch(() => {});
+  }, []);
 
   const navLinks = [
     { href: "/", label: "หน้าแรก" },
@@ -47,22 +54,25 @@ export default function Navbar() {
               <Activity className="w-3 h-3 text-[#2f3437]" />
               รายงานล่าสุด
             </span>
-            <span className="text-[#37352f] font-medium truncate max-w-[280px] sm:max-w-[480px]">
-              สรุปผลประกบคู่ ยูฟ่า แชมเปียนส์ลีก รอบ 8 ทีมสุดท้าย
-            </span>
+            {latest[0] ? (
+              <Link
+                href={articleHref(latest[0])}
+                className="text-[#37352f] font-medium truncate max-w-[280px] sm:max-w-[480px] hover:underline"
+              >
+                {latest[0].title}
+              </Link>
+            ) : (
+              <span className="text-[#9b9a97] truncate">กำลังโหลดข่าวล่าสุด...</span>
+            )}
           </div>
 
-          {/* Quick Match Ticker */}
-          <div className="hidden md:flex items-center gap-5 overflow-x-auto text-[11px] text-[#787774] shrink-0">
-            {MOCK_FIXTURES.slice(0, 3).map((f) => (
-              <div key={f.id} className="flex items-center gap-1.5 whitespace-nowrap">
-                <span className="text-[#9b9a97]">{f.league.split(" ")[0]}</span>
-                <span className="text-[#37352f] font-medium">{f.homeTeam}</span>
-                <span className="px-1.5 py-0.2 bg-white border border-[#e9e9e7] rounded text-[#2f3437] font-mono font-semibold">
-                  {f.homeScore !== null ? `${f.homeScore}-${f.awayScore}` : f.date}
-                </span>
-                <span className="text-[#37352f] font-medium">{f.awayTeam}</span>
-              </div>
+          {/* Other recent headlines */}
+          <div className="hidden lg:flex items-center gap-4 text-[11px] text-[#787774] min-w-0">
+            {latest.slice(1, 3).map((n) => (
+              <Link key={n.id} href={articleHref(n)} className="truncate max-w-[260px] hover:text-[#2f3437]">
+                <span className="text-[#9b9a97] mr-1">{timeAgo(n.publishedAt)}</span>
+                {n.title}
+              </Link>
             ))}
           </div>
         </div>
@@ -125,7 +135,7 @@ export default function Navbar() {
 
               <div className="flex items-center gap-2 pl-2 border-l border-[#e9e9e7]">
                 <div className="w-7 h-7 rounded-full bg-[#f1f1ef] border border-[#e9e9e7] flex items-center justify-center font-bold text-xs text-[#2f3437]">
-                  {user.favoriteClub.charAt(0)}
+                  {(user.favoriteClub || user.displayName).charAt(0)}
                 </div>
                 <div className="flex flex-col text-left">
                   <span className="text-xs font-semibold text-[#2f3437] leading-tight max-w-[90px] truncate">
@@ -135,13 +145,15 @@ export default function Navbar() {
                     {user.favoriteClub}
                   </span>
                 </div>
-                <Link
-                  href="/admin"
-                  title="ระบบจัดการข่าวสาร"
-                  className="p-1.5 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] text-[#787774] hover:text-[#2f3437] transition-colors"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    title="ระบบจัดการข่าวสาร"
+                    className="p-1.5 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] text-[#787774] hover:text-[#2f3437] transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </Link>
+                )}
 
                 <button
                   onClick={logout}
