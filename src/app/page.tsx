@@ -54,7 +54,6 @@ export default function HomePage() {
 
   // Prefer an editor-marked featured story, otherwise the newest article
   const featuredNews = newsList.find((n) => n.isFeatured) || newsList[0];
-  const isLiveActive = liveCount > 0;
 
   const filteredNews = newsList.filter((n) => n !== featuredNews && matchesFilter(n, selectedCategory));
 
@@ -93,7 +92,7 @@ export default function HomePage() {
                 <span className="notion-tag font-mono text-[#787774]">
                   {featuredNews.league}
                 </span>
-                {isLiveActive && (
+                {featuredNews.isLive && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     อัปเดตสด 24 ชม.

@@ -42,8 +42,18 @@ export interface NewsComment {
   createdAt: string;
 }
 
+/** Neutral placeholder (inline SVG, never fails to load) */
 export const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80";
+  "data:image/svg+xml;charset=utf-8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="750" viewBox="0 0 1200 750">' +
+      '<rect width="1200" height="750" fill="#1f6f43"/>' +
+      '<g fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="6">' +
+      '<rect x="60" y="60" width="1080" height="630"/><line x1="600" y1="60" x2="600" y2="690"/>' +
+      '<circle cx="600" cy="375" r="95"/><rect x="60" y="235" width="150" height="280"/><rect x="990" y="235" width="150" height="280"/></g>' +
+      '<text x="600" y="390" font-family="sans-serif" font-size="44" font-weight="700" fill="#ffffff" fill-opacity=".85" text-anchor="middle">RMLN</text>' +
+      "</svg>"
+  );
 
 export function articleHref(a: Pick<NewsArticle, "slug">): string {
   return `/news/view?slug=${encodeURIComponent(a.slug)}`;
@@ -65,7 +75,7 @@ export function mapDbArticle(row: any): NewsArticle {
     author: row.author || "กองบรรณาธิการ RMLN",
     isBreaking: !!row.is_breaking,
     isFeatured: !!row.is_featured,
-    publishedAt: toIso(row.published_at || row.created_at),
+    publishedAt: toIso(row.published_at, row.created_at),
     readTime: row.read_time || "3 นาที",
     sourceUrl: row.source_url || undefined,
     sourceName: row.source_name || undefined,
@@ -93,7 +103,7 @@ export function mapLiveArticle(item: any): NewsArticle {
     author: item.author || item.sourceName || "",
     isBreaking: false,
     isFeatured: false,
-    publishedAt: toIso(item.publishedAt),
+    publishedAt: toIso(item.publishedAt, new Date().toISOString()),
     readTime: item.readTime || "2 นาที",
     sourceUrl: item.sourceUrl,
     sourceName: item.sourceName,
@@ -113,11 +123,20 @@ function parseJson(v: string | null | undefined) {
 }
 
 /** D1 stores CURRENT_TIMESTAMP as "YYYY-MM-DD HH:MM:SS" (UTC, no zone) */
-function toIso(value: string | undefined | null): string {
-  if (!value) return new Date().toISOString();
+function parseDate(value: string | undefined | null): Date | null {
+  if (!value) return null;
   const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? value.replace(" ", "T") + "Z" : value;
   const d = new Date(normalized);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** First parseable date wins (e.g. published_at, then created_at); never invents "now" for stored rows */
+function toIso(...values: (string | undefined | null)[]): string {
+  for (const v of values) {
+    const d = parseDate(v);
+    if (d) return d.toISOString();
+  }
+  return new Date(0).toISOString();
 }
 
 export function timeAgo(iso: string): string {
