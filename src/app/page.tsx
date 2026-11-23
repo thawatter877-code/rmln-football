@@ -200,10 +200,10 @@ export default function HomePage() {
               <div className="space-y-1 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-semibold text-[#2f3437]">
                   <Compass className="w-4 h-4 text-[#787774]" />
-                  <span>ระบบจำลอง: อคาเดมี่เยาวชน (Youth Academy)</span>
+                  <span>อคาเดมี่เยาวชน (Youth Academy)</span>
                 </div>
                 <h3 className="text-base font-bold text-[#2f3437]">
-                  ทดลองสุ่มสัญชาติและค้นหาดาวรุ่งเข้าสู่อคาเดมี่ของคุณ
+                  สุ่มสัญชาติและค้นหาดาวรุ่งเข้าสู่อคาเดมี่ของคุณ
                 </h3>
                 <p className="text-xs text-[#787774]">
                   สะสมเหรียญและเพชรจากการอ่านบทวิเคราะห์เพื่อนำมาสุ่มนักเตะและจัดทีม
@@ -274,11 +274,11 @@ export default function HomePage() {
                   <span className="col-span-2 text-right">แต้ม</span>
                 </div>
                 {[
-                  { pos: 1, club: "Arsenal", p: 12, pts: 28 },
-                  { pos: 2, club: "Man City", p: 12, pts: 26 },
-                  { pos: 3, club: "Liverpool", p: 12, pts: 25 },
-                  { pos: 4, club: "Chelsea", p: 12, pts: 22 },
-                  { pos: 5, club: "Tottenham", p: 12, pts: 20 },
+                  { pos: 1, club: "Liverpool", p: 11, pts: 28 },
+                  { pos: 2, club: "Man City", p: 11, pts: 23 },
+                  { pos: 3, club: "Chelsea", p: 11, pts: 19 },
+                  { pos: 4, club: "Arsenal", p: 11, pts: 19 },
+                  { pos: 5, club: "Nott'm Forest", p: 11, pts: 19 },
                 ].map((row) => (
                   <div
                     key={row.pos}

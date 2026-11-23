@@ -153,7 +153,7 @@ export default function YouthAcademyPage() {
               </span>
             </div>
             <p className="text-xs text-[#787774] mt-0.5 font-normal">
-              ระบบจำลองการค้นหาและพัฒนาผู้เล่นดาวรุ่งสู่วงการฟุตบอล
+              ระบบค้นหาและพัฒนาผู้เล่นดาวรุ่งสู่วงการฟุตบอล
             </p>
           </div>
 
