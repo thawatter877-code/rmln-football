@@ -42,8 +42,8 @@ export default function RegisterPage() {
         
         {/* Header */}
         <div className="text-center space-y-1.5">
-          <div className="w-9 h-9 rounded-md bg-[#2f3437] text-white flex items-center justify-center font-bold text-xs mx-auto">
-            RL
+          <div className="w-9 h-9 rounded-md bg-[#2f3437] flex items-center justify-center p-1.5 mx-auto">
+            <img src="/logo.svg" alt="RMLN" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-lg font-bold text-[#2f3437]">
             สมัครสมาชิก RMLN

@@ -9,9 +9,9 @@ export default function Footer() {
         {/* Brand */}
         <div className="space-y-3 md:col-span-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-[#2f3437] text-white flex items-center justify-center font-bold text-xs">
-              RL
-            </div>
+            <div className="w-7 h-7 rounded-md bg-[#2f3437] flex items-center justify-center p-1">
+            <img src="/logo.svg" alt="RMLN" className="w-full h-full object-contain" />
+          </div>
             <div>
               <div className="font-bold text-[#2f3437] text-sm tracking-tight">
                 ร่ายมนต์ลูกหนัง
