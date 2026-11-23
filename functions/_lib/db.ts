@@ -113,6 +113,7 @@ export async function ensureRmlnSchema(db: any) {
       "ALTER TABLE rmln_news ADD COLUMN created_by TEXT",
       "ALTER TABLE rmln_news ADD COLUMN status TEXT DEFAULT 'published'",
       "ALTER TABLE rmln_news ADD COLUMN ai_notes TEXT",
+      "ALTER TABLE rmln_users ADD COLUMN last_login_at TEXT",
     ];
     for (const sql of migrations) {
       // Fails harmlessly with "duplicate column" when the column already exists
