@@ -52,7 +52,7 @@ export default function RegisterPage() {
             สร้างบัญชีเพื่อร่วมแสดงความคิดเห็นและทดลองใช้ระบบอคาเดมี่
           </p>
           <div className="notion-tag font-mono text-[10px] mt-1">
-            รับโบนัสเริ่มต้น: 198,000 Coins • 282 Gems
+            รับโบนัสเริ่มต้น: 100,000 Coins • 200 Gems
           </div>
         </div>
 
