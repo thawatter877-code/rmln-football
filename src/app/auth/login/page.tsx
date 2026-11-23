@@ -38,7 +38,7 @@ export default function LoginPage() {
             เข้าสู่ระบบ RMLN
           </h1>
           <p className="text-xs text-[#787774]">
-            บัญชีสมาชิกสำหรับแสดงความคิดเห็นและใช้งานระบบอคาเดมี่
+            ใช้บัญชี RMLN หรืออีเมลและรหัสผ่านเดียวกับ undes-studio ได้เลย
           </p>
         </div>
 
