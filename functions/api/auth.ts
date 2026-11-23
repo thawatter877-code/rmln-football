@@ -14,6 +14,32 @@ import {
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** undes-studio shares this D1 database; its accounts live in the `users` table (missing -> null) */
+async function findUndesUser(env: Env, email: string): Promise<any | null> {
+  if (!email.includes("@")) return null;
+  return env.DB.prepare("SELECT id, name, email, password_hash, role FROM users WHERE lower(email) = ? LIMIT 1")
+    .bind(email.trim().toLowerCase())
+    .first()
+    .catch(() => null);
+}
+
+async function undesPasswordOk(undes: any, password: string): Promise<boolean> {
+  const stored = String(undes?.password_hash || "");
+  if (!stored.startsWith("pbkdf2$")) return false; // oauth / legacy accounts must use undes-studio first
+  return (await verifyPassword(password, stored)).ok;
+}
+
+/** Pick a free RMLN username based on the undes-studio name/email */
+async function freeUsername(env: Env, seed: string): Promise<string> {
+  let base = seed.toLowerCase().replace(/[^a-z0-9_.]/g, "").slice(0, 18);
+  if (base.length < 3) base = `fan${base}`;
+  let candidate = base;
+  for (let i = 2; await env.DB.prepare("SELECT 1 FROM rmln_users WHERE lower(username) = ?").bind(candidate).first(); i++) {
+    candidate = `${base}${i}`;
+  }
+  return candidate;
+}
+
 async function loadPublicUser(env: Env, id: string) {
   return env.DB.prepare(`SELECT ${PUBLIC_USER_COLUMNS} FROM rmln_users WHERE id = ?`).bind(id).first();
 }
@@ -62,7 +88,7 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       const nowIso = new Date().toISOString();
 
       const existing = await env.DB.prepare(
-        "SELECT id, username, lower(email) AS email, last_login_at FROM rmln_users WHERE username = ? OR lower(email) = ?"
+        "SELECT id, username, lower(email) AS email, last_login_at FROM rmln_users WHERE lower(username) = lower(?) OR lower(email) = ?"
       )
         .bind(username, email)
         .first();
@@ -71,8 +97,14 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
         // An account whose sign-up never completed (no session was ever issued, e.g. the server
         // failed right after saving it) can be finished by signing up again with the SAME
         // username AND email. Any account that has ever logged in is never overwritten.
-        const unfinished = !existing.last_login_at && existing.username === username && existing.email === email;
-        if (!unfinished) return json({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }, 400);
+        const unfinished =
+          !existing.last_login_at && String(existing.username).toLowerCase() === username.toLowerCase() && existing.email === email;
+        if (!unfinished) {
+          if (existing.email === email && (await findUndesUser(env, email))) {
+            return json({ error: "อีเมลนี้มีบัญชีอยู่แล้ว เข้าสู่ระบบด้วยอีเมลและรหัสผ่านเดียวกับ undes-studio ได้เลย" }, 400);
+          }
+          return json({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }, 400);
+        }
 
         const cookie = await createSessionCookie(env, { id: existing.id, username, role }, request);
         await env.DB.prepare(
@@ -102,16 +134,37 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       const password = String(body.password || "");
       if (!identifier || !password) return json({ error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" }, 400);
 
-      const user = await env.DB.prepare("SELECT * FROM rmln_users WHERE username = ? OR lower(email) = ?")
+      let user = await env.DB.prepare("SELECT * FROM rmln_users WHERE lower(username) = lower(?) OR lower(email) = ?")
         .bind(identifier, identifier.toLowerCase())
         .first();
 
       // Same message for unknown user / wrong password to avoid account enumeration
       const invalid = () => json({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" }, 401);
-      if (!user) return invalid();
 
-      const { ok, needsRehash } = await verifyPassword(password, user.password_hash);
-      if (!ok) return invalid();
+      let ok = false;
+      let needsRehash = false;
+      if (user) ({ ok, needsRehash } = await verifyPassword(password, user.password_hash));
+
+      // Single sign-on with undes-studio (same D1): its email + password also work here
+      if (!ok) {
+        const undes = await findUndesUser(env, user?.email || identifier);
+        if (undes && (await undesPasswordOk(undes, password))) {
+          ok = true;
+          needsRehash = true; // keep the RMLN password in sync with undes-studio
+          if (!user) {
+            const id = `u-${crypto.randomUUID()}`;
+            const uname = await freeUsername(env, String(undes.email).split("@")[0]);
+            await env.DB.prepare(
+              `INSERT INTO rmln_users (id, username, email, password_hash, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad, role)
+               VALUES (?, ?, ?, ?, ?, '', 100000, 200, 'D4', 0, 50, 'member')`
+            )
+              .bind(id, uname, String(undes.email).toLowerCase(), await hashPassword(password), String(undes.name || uname).slice(0, 60))
+              .run();
+            user = await env.DB.prepare("SELECT * FROM rmln_users WHERE id = ?").bind(id).first();
+          }
+        }
+      }
+      if (!user || !ok) return invalid();
 
       if (needsRehash) {
         await env.DB.prepare("UPDATE rmln_users SET password_hash = ? WHERE id = ?")
