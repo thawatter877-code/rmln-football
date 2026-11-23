@@ -72,11 +72,27 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return { ok: safeEqual(await legacyHash(password), stored), needsRehash: true };
 }
 
-function getSecret(env: Env): Uint8Array {
-  if (!env.JWT_SECRET || env.JWT_SECRET.length < 32) {
-    throw new Error("JWT_SECRET is not configured (set a random string of 32+ characters in Cloudflare Pages settings)");
-  }
-  return new TextEncoder().encode(env.JWT_SECRET);
+let cachedSecret: Uint8Array | null = null;
+
+/**
+ * Session signing key. Uses the JWT_SECRET env var when set; otherwise a random 256-bit key is
+ * generated once and stored in D1 (rmln_settings.jwt_secret), so the site works without manual setup.
+ */
+async function getSecret(env: Env): Promise<Uint8Array> {
+  if (env.JWT_SECRET && env.JWT_SECRET.length >= 32) return new TextEncoder().encode(env.JWT_SECRET);
+  if (cachedSecret) return cachedSecret;
+  if (!env.DB) throw new Error("JWT_SECRET is not configured and no database is bound");
+
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS rmln_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)").run();
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  // INSERT OR IGNORE + read back: concurrent first requests all end up with the same stored key
+  await env.DB.prepare("INSERT OR IGNORE INTO rmln_settings (key, value) VALUES ('jwt_secret', ?)").bind(random).run();
+  const row = await env.DB.prepare("SELECT value FROM rmln_settings WHERE key = 'jwt_secret'").first();
+  if (!row?.value) throw new Error("Could not initialise session key");
+  cachedSecret = new TextEncoder().encode(row.value);
+  return cachedSecret;
 }
 
 export async function createSessionCookie(env: Env, user: SessionUser, request: Request): Promise<string> {
@@ -85,7 +101,7 @@ export async function createSessionCookie(env: Env, user: SessionUser, request: 
     .setSubject(user.id)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DAYS}d`)
-    .sign(getSecret(env));
+    .sign(await getSecret(env));
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}`;
 }
@@ -108,7 +124,7 @@ export async function getSessionUser(request: Request, env: Env): Promise<Sessio
   const token = readCookie(request, COOKIE_NAME);
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, getSecret(env));
+    const { payload } = await jwtVerify(token, await getSecret(env));
     if (!payload.sub) return null;
     if (env.DB) {
       const row = await env.DB.prepare("SELECT id, username, role FROM rmln_users WHERE id = ?").bind(payload.sub).first();
