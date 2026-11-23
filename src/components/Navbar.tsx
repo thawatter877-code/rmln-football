@@ -16,7 +16,8 @@ import {
   Coins,
   Shield,
   Activity,
-  Compass
+  Compass,
+  FileText
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { MOCK_FIXTURES } from "@/data/mockNews";
@@ -134,6 +135,14 @@ export default function Navbar() {
                     {user.favoriteClub}
                   </span>
                 </div>
+                <Link
+                  href="/admin"
+                  title="ระบบจัดการข่าวสาร"
+                  className="p-1.5 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] text-[#787774] hover:text-[#2f3437] transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                </Link>
+
                 <button
                   onClick={logout}
                   title="ออกจากระบบ"

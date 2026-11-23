@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Flame, 
@@ -10,22 +10,62 @@ import {
   MessageSquare, 
   ArrowRight, 
   Trophy, 
-  TrendingUp,
-  Compass,
-  ArrowLeftRight,
-  BookOpen,
-  ChevronRight,
-  Activity
+  TrendingUp, 
+  Compass, 
+  ArrowLeftRight, 
+  BookOpen, 
+  ChevronRight, 
+  Activity,
+  Radio,
+  ExternalLink
 } from "lucide-react";
-import { MOCK_NEWS, MOCK_FIXTURES } from "@/data/mockNews";
+import { MOCK_NEWS, MOCK_FIXTURES, NewsArticle } from "@/data/mockNews";
 
 export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const featuredNews = MOCK_NEWS[0];
+  const [newsList, setNewsList] = useState<NewsArticle[]>(MOCK_NEWS);
+  const [isLiveActive, setIsLiveActive] = useState(false);
+
+  // Fetch real-time live football feed from Cloudflare Functions API
+  useEffect(() => {
+    fetch("/api/live-news")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.success && data?.liveNews && data.liveNews.length > 0) {
+          const liveMapped: NewsArticle[] = data.liveNews.map((item: any) => ({
+            id: item.id,
+            slug: item.slug,
+            title: item.title,
+            excerpt: item.excerpt,
+            content: item.content,
+            category: item.category as any,
+            categoryLabel: item.categoryLabel,
+            league: item.league,
+            club: item.sourceName || "Sky Sports / BBC",
+            imageUrl: item.imageUrl,
+            views: item.views || 2500,
+            author: item.author || "Sky Sports",
+            isBreaking: true,
+            isFeatured: false,
+            publishedAt: item.publishedAt || "เมื่อสักครู่",
+            readTime: item.readTime || "2 นาที",
+            reactions: { fire: 120, magic: 240, clap: 80 },
+            comments: []
+          }));
+
+          // Merge live news with analytical articles
+          setNewsList([...liveMapped.slice(0, 5), ...MOCK_NEWS]);
+          setIsLiveActive(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const featuredNews = newsList[0] || MOCK_NEWS[0];
 
   const filteredNews = selectedCategory === "all" 
-    ? MOCK_NEWS 
-    : MOCK_NEWS.filter(n => n.category === selectedCategory || n.league.toLowerCase().includes(selectedCategory.toLowerCase()));
+    ? newsList 
+    : newsList.filter(n => n.category === selectedCategory || n.league.toLowerCase().includes(selectedCategory.toLowerCase()));
 
   return (
     <div className="min-h-screen bg-white text-[#2f3437]">
@@ -40,15 +80,21 @@ export default function HomePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="notion-tag text-[#2f3437] font-semibold bg-[#f1f1ef]">
                   <Activity className="w-3 h-3 text-[#2f3437]" />
-                  รายงานพิเศษ
+                  {isLiveActive ? "LIVE FEED ข่าวสดเรียลไทม์" : "รายงานพิเศษ"}
                 </span>
                 <span className="notion-tag font-mono text-[#787774]">
                   {featuredNews.league}
                 </span>
+                {isLiveActive && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    อัปเดตสด 24 ชม.
+                  </span>
+                )}
               </div>
 
               <Link href={`/news/${featuredNews.slug}`} className="group block">
-                <h1 className="text-2xl sm:text-4xl lg:text-[42px] font-bold text-[#2f3437] group-hover:text-black transition-colors leading-[1.25] tracking-tight">
+                <h1 className="text-2xl sm:text-4xl lg:text-[40px] font-bold text-[#2f3437] group-hover:text-black transition-colors leading-[1.25] tracking-tight">
                   {featuredNews.title}
                 </h1>
               </Link>
@@ -64,7 +110,7 @@ export default function HomePage() {
                 <span>•</span>
                 <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {featuredNews.views.toLocaleString()} ครั้ง</span>
                 <span>•</span>
-                <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> {featuredNews.comments.length} ความคิดเห็น</span>
+                <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> {featuredNews.comments?.length || 0} ความคิดเห็น</span>
               </div>
 
               <div className="pt-2">
@@ -106,7 +152,7 @@ export default function HomePage() {
           {/* LEFT 8 COLS: NEWS FEED */}
           <div className="lg:col-span-8 space-y-6">
             
-            {/* Notion Style Category Pills */}
+            {/* Category Filter Pills */}
             <div className="flex items-center justify-between gap-2 border-b border-[#e9e9e7] pb-3 overflow-x-auto">
               <div className="flex items-center gap-1 shrink-0">
                 {[
@@ -185,7 +231,7 @@ export default function HomePage() {
                             <Eye className="w-3 h-3" /> {news.views.toLocaleString()}
                           </span>
                           <span className="flex items-center gap-1">
-                            <MessageSquare className="w-3 h-3" /> {news.comments.length}
+                            <MessageSquare className="w-3 h-3" /> {news.comments?.length || 0}
                           </span>
                         </div>
                       </div>
@@ -195,7 +241,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Notion-style Callout Box for Youth Academy */}
+            {/* Youth Academy Callout Box */}
             <div className="notion-callout p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="space-y-1 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-semibold text-[#2f3437]">
@@ -224,7 +270,7 @@ export default function HomePage() {
           {/* RIGHT 4 COLS: SIDEBAR */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* 1. MATCH CENTER (Notion Database Table Style) */}
+            {/* 1. MATCH CENTER */}
             <div className="notion-card p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-[#e9e9e7] pb-2.5">
                 <div className="flex items-center gap-1.5">
@@ -256,7 +302,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 2. LEAGUE STANDINGS (Notion Clean Table) */}
+            {/* 2. LEAGUE STANDINGS */}
             <div className="notion-card p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-[#e9e9e7] pb-2.5">
                 <div className="flex items-center gap-1.5">
@@ -295,7 +341,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 3. NOTION STYLE SIGN UP CALLOUT */}
+            {/* 3. SIGN UP CALLOUT */}
             <div className="notion-callout p-4 text-center space-y-2.5">
               <h4 className="text-xs font-bold text-[#2f3437]">
                 ร่วมเป็นสมาชิก RMLN
