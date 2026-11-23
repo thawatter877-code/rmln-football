@@ -12,8 +12,6 @@ import {
   Menu, 
   X, 
   LogOut,
-  Gem,
-  Coins,
   Shield,
   Activity,
   Compass,
@@ -42,7 +40,7 @@ export default function Navbar() {
     { href: "/news?league=Premier+League", label: "พรีเมียร์ลีก" },
     { href: "/news?league=UEFA+Champions+League", label: "แชมเปียนส์ลีก" },
     { href: "/news?category=transfer", label: "ตลาดซื้อขาย", icon: ArrowLeftRight },
-    { href: "/academy", label: "อคาเดมี่เยาวชน", icon: Compass },
+    { href: "/academy", label: "ดาวรุ่ง TOP 100", icon: Sparkles },
   ];
 
   return (
@@ -128,19 +126,7 @@ export default function Navbar() {
         <div className="hidden sm:flex items-center gap-2.5">
           {user ? (
             <div className="flex items-center gap-2">
-              <Link
-                href="/academy"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] hover:bg-[#f7f6f3] text-xs font-mono text-[#37352f] transition-colors"
-                title="เหรียญและเพชรสะสม"
-              >
-                <Coins className="w-3.5 h-3.5 text-[#787774]" />
-                <span>{(user.coins / 1000).toFixed(0)}K</span>
-                <span className="text-[#e9e9e7]">•</span>
-                <Gem className="w-3.5 h-3.5 text-[#787774]" />
-                <span>{user.gems}</span>
-              </Link>
-
-              <div className="flex items-center gap-2 pl-2 border-l border-[#e9e9e7]">
+              <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full bg-[#f1f1ef] border border-[#e9e9e7] flex items-center justify-center font-bold text-xs text-[#2f3437]">
                   {(user.favoriteClub || user.displayName).charAt(0)}
                 </div>
@@ -223,8 +209,7 @@ export default function Navbar() {
           {user ? (
             <div className="pt-3 border-t border-[#e9e9e7] flex items-center justify-between">
               <div className="text-xs">
-                <div className="font-semibold text-[#2f3437]">{user.displayName} ({user.favoriteClub})</div>
-                <div className="text-[#787774] font-mono">{user.coins.toLocaleString()} Coins • {user.gems} Gems</div>
+                <div className="font-semibold text-[#2f3437]">{user.displayName}{user.favoriteClub ? ` (${user.favoriteClub})` : ""}</div>
               </div>
               <button
                 onClick={() => {

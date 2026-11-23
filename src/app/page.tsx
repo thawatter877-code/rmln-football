@@ -269,18 +269,18 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Youth Academy Callout Box */}
+            {/* Top 100 young players callout */}
             <div className="notion-callout p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="space-y-1 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-semibold text-[#2f3437]">
                   <Compass className="w-4 h-4 text-[#787774]" />
-                  <span>อคาเดมี่เยาวชน (Youth Academy)</span>
+                  <span>ดาวรุ่ง TOP 100</span>
                 </div>
                 <h3 className="text-base font-bold text-[#2f3437]">
-                  สุ่มสัญชาติและค้นหาดาวรุ่งเข้าสู่อคาเดมี่ของคุณ
+                  100 นักเตะดาวรุ่งที่น่าจับตามองที่สุดในโลก
                 </h3>
                 <p className="text-xs text-[#787774]">
-                  ใช้เหรียญและเพชรสุ่มนักเตะดาวรุ่งเข้าสู่ทีมของคุณ
+                  นักเตะอายุไม่เกิน 21 ปี พร้อมสโมสรปัจจุบันและจุดเด่น อัปเดตและตรวจสอบโดยกองบรรณาธิการ
                 </p>
               </div>
 
@@ -288,7 +288,7 @@ export default function HomePage() {
                 href="/academy"
                 className="notion-btn-primary px-4 py-2 shrink-0"
               >
-                <span>เข้าสู่ระบบอคาเดมี่</span>
+                <span>ดูรายชื่อ TOP 100</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>

@@ -1,376 +1,310 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { 
-  Sparkles, 
-  Coins, 
-  Gem, 
-  Dices, 
-  Search, 
-  Shield, 
-  Zap, 
-  Crosshair, 
-  Sprout, 
-  PenTool, 
-  Trophy
-} from "lucide-react";
-import Link from "next/link";
+import React, { useEffect, useMemo, useState } from "react";
+import { Search, Sparkles, ShieldCheck, AlertTriangle, RefreshCw, EyeOff, Eye, Trash2, Pencil, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { timeAgo } from "@/lib/news";
 
-interface ScoutedPlayer {
+interface Prospect {
   id: string;
+  grp: string;
   name: string;
-  nationality: string;
-  position: string;
-  age: number;
-  overall: number;
-  potential: number;
-  specialSkill: string;
+  name_th: string | null;
+  birth_date: string | null;
+  nationality: string | null;
+  nationality_th: string | null;
+  position: string | null;
+  position_th: string | null;
+  club: string | null;
+  league: string | null;
+  highlight: string | null;
+  score: number;
+  verified: number;
+  verify_note: string | null;
+  sources: string | null;
+  edited_by_staff: number;
+  hidden: number;
+  updated_at: string;
 }
 
-const COUNTRIES = ["อังกฤษ", "บราซิล", "สเปน", "ฝรั่งเศส", "อาร์เจนตินา", "เยอรมนี", "ไทย", "ญี่ปุ่น", "เนเธอร์แลนด์", "โปรตุเกส"];
-const POSITIONS = [
-  { id: "GK", label: "ผู้รักษาประตู", icon: Shield },
-  { id: "DEF", label: "ตัวรับ", icon: Shield },
-  { id: "MID", label: "ตัวกลาง", icon: Crosshair },
-  { id: "FWD", label: "ตัวรุก", icon: Zap },
+const GROUP_TABS = [
+  { id: "all", label: "ทั้งหมด" },
+  { id: "FWD", label: "กองหน้า" },
+  { id: "MID", label: "กองกลาง" },
+  { id: "DEF", label: "กองหลัง" },
+  { id: "GK", label: "ผู้รักษาประตู" },
 ];
+const REFRESH_ORDER = ["GK", "DEF", "MID", "FWD"];
 
-export default function YouthAcademyPage() {
-  const { user, loading, setUserFromServer } = useAuth();
+function ageOf(birth: string | null): number | null {
+  if (!birth) return null;
+  const b = new Date(birth + "T00:00:00Z");
+  if (isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - b.getUTCFullYear();
+  const m = now.getUTCMonth() - b.getUTCMonth();
+  if (m < 0 || (m === 0 && now.getUTCDate() < b.getUTCDate())) age--;
+  return age;
+}
 
-  const [selectedNationality, setSelectedNationality] = useState<string>("สุ่มสัญชาติ");
-  const [searchCountry, setSearchCountry] = useState<string>("");
-  const [selectedPosition, setSelectedPosition] = useState<string>("MID");
-  const [customFirstName, setCustomFirstName] = useState<string>("");
-  const [customLastName, setCustomLastName] = useState<string>("");
-  const [scoutedRoster, setScoutedRoster] = useState<ScoutedPlayer[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
-  const [loadingAction, setLoadingAction] = useState(false);
+function parseSources(s: string | null): { title: string; uri: string }[] {
+  try {
+    return s ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+}
 
-  const mapPlayer = (p: any): ScoutedPlayer => ({
-    id: p.id,
-    name: p.name,
-    nationality: p.nationality,
-    position: p.position,
-    age: p.age,
-    overall: p.overall ?? p.rating,
-    potential: p.potential,
-    specialSkill: p.special_skill || "ทักษะมาตรฐาน",
-  });
+export default function Top100Page() {
+  const { isStaff } = useAuth();
+  const [players, setPlayers] = useState<Prospect[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [group, setGroup] = useState("all");
+  const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
-  // Load this user's roster from D1 (session cookie identifies the user)
+  const load = async () => {
+    const res = await fetch(`/api/prospects${isStaff ? "?all=1" : ""}`, { credentials: "same-origin" }).catch(() => null);
+    const data = await res?.json().catch(() => null);
+    setPlayers(data?.players || []);
+    setUpdatedAt(data?.updatedAt || null);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    if (!user) return;
-    fetch("/api/scout", { credentials: "same-origin" })
-      .then((r) => r.json())
-      .then((data) => setScoutedRoster((data?.players || []).map(mapPlayer)))
-      .catch(() => {});
-  }, [user?.id]);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaff]);
 
-  const handleRandomNationality = () => {
-    const random = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
-    setSelectedNationality(random);
-    setSearchCountry(random);
+  // Rank among visible players (overall), then filter for display
+  const ranked = useMemo(() => {
+    const visible = players.filter((p) => !p.hidden).slice(0, 100);
+    const rankById = new Map(visible.map((p, i) => [p.id, i + 1]));
+    const pool = isStaff ? players : visible;
+    const q = query.trim().toLowerCase();
+    return pool
+      .filter((p) => group === "all" || p.grp === group)
+      .filter(
+        (p) =>
+          !q ||
+          [p.name, p.name_th, p.club, p.nationality, p.nationality_th, p.league].some((v) => (v || "").toLowerCase().includes(q))
+      )
+      .map((p) => ({ ...p, rank: rankById.get(p.id) || null }));
+  }, [players, group, query, isStaff]);
+
+  const post = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/prospects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+    return data;
   };
 
-  const scout = async (mode: "scout_coins" | "scout_gems" | "named") => {
-    if (!user || loadingAction) return;
-    setLoadingAction(true);
-    setMessage(null);
+  const refreshAll = async () => {
+    if (!confirm("ให้ AI ค้นหาและตรวจสอบรายชื่อดาวรุ่งใหม่ทั้ง 4 ตำแหน่ง? ใช้เวลาประมาณ 2-5 นาที (ข้อมูลที่ทีมงานแก้ไขเองจะไม่ถูกแทนที่)")) return;
+    for (const g of REFRESH_ORDER) {
+      setBusy(g);
+      setMessage({ text: `AI กำลังค้นหาและตรวจสอบ: ${GROUP_TABS.find((t) => t.id === g)?.label}...` });
+      try {
+        const r = await post({ action: "refresh", group: g });
+        setMessage({ text: `${GROUP_TABS.find((t) => t.id === g)?.label}: ได้ ${r.result.stored} คน (ยืนยันข้อมูลแล้ว ${r.result.verified})` });
+        await load();
+      } catch (err: any) {
+        setMessage({ text: `อัปเดต ${g} ไม่สำเร็จ: ${err.message}`, error: true });
+        break;
+      }
+    }
+    setBusy(null);
+  };
+
+  const toggleHidden = async (p: Prospect) => {
     try {
-      const res = await fetch("/api/scout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          mode,
-          nationality: COUNTRIES.includes(selectedNationality) ? selectedNationality : undefined,
-          position: selectedPosition,
-          firstName: customFirstName.trim(),
-          lastName: customLastName.trim(),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.player) throw new Error(data?.error || "ทำรายการไม่สำเร็จ");
-
-      const player = mapPlayer(data.player);
-      setScoutedRoster((prev) => [player, ...prev]);
-      setUserFromServer(data.user);
-      setMessage(`สำเร็จ! ได้ดาวรุ่งใหม่: ${player.name} (เรตติ้ง ${player.overall}, ศักยภาพ ${player.potential})`);
+      await post({ action: "update", id: p.id, hidden: !p.hidden });
+      await load();
     } catch (err: any) {
-      setMessage(err.message);
-    } finally {
-      setLoadingAction(false);
+      setMessage({ text: err.message, error: true });
     }
   };
 
-  const handleScoutPlayer = (useCoins: boolean) => scout(useCoins ? "scout_coins" : "scout_gems");
-
-  const handleCreateNamedPlayer = () => {
-    if (!customFirstName.trim() || !customLastName.trim()) {
-      setMessage("กรุณากรอกชื่อและนามสกุล");
-      return;
+  const remove = async (p: Prospect) => {
+    if (!confirm(`ลบ ${p.name} ออกจากรายชื่อ?`)) return;
+    try {
+      await post({ action: "delete", id: p.id });
+      await load();
+    } catch (err: any) {
+      setMessage({ text: err.message, error: true });
     }
-    scout("named");
   };
 
-  if (loading) {
-    return <div className="min-h-[60vh] flex items-center justify-center text-sm text-[#9b9a97]">กำลังโหลด...</div>;
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 text-center px-4">
-        <p className="text-sm font-semibold text-[#2f3437]">อคาเดมี่เยาวชน</p>
-        <p className="text-xs text-[#787774]">เข้าสู่ระบบเพื่อสุ่มและสะสมนักเตะดาวรุ่งของคุณ</p>
-        <div className="flex gap-2">
-          <Link href="/auth/login" className="notion-btn-secondary px-3 py-1.5 text-xs">เข้าสู่ระบบ</Link>
-          <Link href="/auth/register" className="notion-btn-primary px-3 py-1.5 text-xs">สมัครสมาชิก</Link>
-        </div>
-      </div>
-    );
-  }
+  const editClub = async (p: Prospect) => {
+    const club = prompt(`สโมสรปัจจุบันของ ${p.name}`, p.club || "");
+    if (club === null) return;
+    const highlight = prompt("จุดเด่น (ภาษาไทย)", p.highlight || "");
+    if (highlight === null) return;
+    try {
+      await post({ action: "update", id: p.id, club, highlight });
+      await load();
+    } catch (err: any) {
+      setMessage({ text: err.message, error: true });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white text-[#2f3437] py-8 px-4 sm:px-6">
-      <div className="max-w-[850px] mx-auto space-y-6">
-        
-        {/* HEADER BAR (Notion Style) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#e9e9e7]">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-[#2f3437] tracking-tight">
-                เยาวชน
-              </h1>
-              <span className="notion-tag font-mono">
-                อคาเดมี่ระดับ {user.academyLevel}
-              </span>
-            </div>
-            <p className="text-xs text-[#787774] mt-0.5 font-normal">
-              ระบบค้นหาและพัฒนาผู้เล่นดาวรุ่งสู่วงการฟุตบอล
-            </p>
+      <div className="max-w-[960px] mx-auto space-y-5">
+        {/* Header */}
+        <div className="space-y-2 pb-4 border-b border-[#e9e9e7]">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-[#2f3437]" />
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">ดาวรุ่ง TOP 100 ของโลก</h1>
           </div>
-
-          {/* Economy pills */}
-          <div className="flex items-center gap-2.5 font-mono text-xs">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-[#2f3437]">
-              <Coins className="w-3.5 h-3.5 text-[#787774]" />
-              <span>{(user.coins / 1000).toFixed(0)}K</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-[#2f3437]">
-              <Gem className="w-3.5 h-3.5 text-[#787774]" />
-              <span>{user.gems}</span>
-            </div>
-            <div className="px-2.5 py-1 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-[#787774]">
-              {user.squadCount}/{user.maxSquad}
-            </div>
-          </div>
+          <p className="text-sm text-[#787774]">
+            100 นักเตะอายุไม่เกิน 21 ปีที่น่าจับตามองที่สุดในตอนนี้ จัดอันดับโดยกองบรรณาธิการ RMLN
+            ด้วยการค้นข้อมูลล่าสุดและตรวจสอบสโมสร วันเกิด และสัญชาติกับแหล่งข่าว
+          </p>
+          <p className="text-[11px] text-[#9b9a97]">
+            {updatedAt ? `อัปเดตล่าสุด ${timeAgo(updatedAt)}` : ""} • อันดับเป็นความเห็นของกองบรรณาธิการ ไม่ใช่สถิติทางการ
+          </p>
         </div>
 
-        {/* FEEDBACK ALERT */}
-        {message && (
-          <div className="p-3 rounded-md bg-[#f7f6f3] border border-[#e9e9e7] text-xs font-medium text-[#2f3437] flex items-center justify-between">
-            <span>{message}</span>
-            <button onClick={() => setMessage(null)} className="text-[#9b9a97] hover:text-[#2f3437]">✕</button>
+        {isStaff && (
+          <div className="notion-callout p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-[#787774]">
+              ทีมงาน: ให้ AI ค้นหาและตรวจสอบรายชื่อใหม่ หรือซ่อน/แก้ไข/ลบรายชื่อที่ไม่ถูกต้อง (ข้อมูลที่แก้เองจะไม่ถูก AI แทนที่)
+            </span>
+            <button onClick={refreshAll} disabled={!!busy} className="notion-btn-primary px-3 py-1.5 text-xs disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
+              <span>{busy ? "AI กำลังทำงาน..." : "อัปเดตรายชื่อด้วย AI"}</span>
+            </button>
           </div>
         )}
 
-        {/* SECTION 1: สัญชาตินักเตะ */}
-        <div className="notion-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#2f3437]">สัญชาตินักเตะ</span>
-            <span className="text-[11px] text-[#787774] font-mono">สุ่มสัญชาติ</span>
+        {message && (
+          <div
+            className={`p-3 rounded-md border text-xs flex justify-between gap-3 ${
+              message.error ? "bg-red-50 border-red-200 text-red-700" : "bg-[#f7f6f3] border-[#e9e9e7]"
+            }`}
+          >
+            <span>{message.text}</span>
+            <button onClick={() => setMessage(null)} className="text-[#9b9a97]">✕</button>
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-2.5">
-            <button
-              onClick={handleRandomNationality}
-              className="w-full sm:w-auto notion-btn-secondary px-3.5 py-2 text-xs shrink-0"
-            >
-              <Dices className="w-3.5 h-3.5 text-[#787774]" />
-              <span>สุ่มสัญชาติ</span>
-            </button>
-            <div className="relative w-full">
-              <Search className="w-3.5 h-3.5 text-[#9b9a97] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="ค้นหาประเทศ"
-                value={searchCountry}
-                onChange={(e) => {
-                  setSearchCountry(e.target.value);
-                  setSelectedNationality(e.target.value || "สุ่มสัญชาติ");
-                }}
-                className="w-full pl-9 pr-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] placeholder:text-[#9b9a97] focus:outline-none focus:border-[#787774]"
-              />
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* SECTION 2: ตำแหน่ง */}
-        <div className="notion-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#2f3437]">ตำแหน่ง</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                const randomPos = POSITIONS[Math.floor(Math.random() * POSITIONS.length)].id;
-                setSelectedPosition(randomPos);
-              }}
-              className="px-3 py-1.5 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] text-xs font-medium text-[#787774] hover:bg-[#f1f1ef]"
-            >
-              สุ่มตำแหน่ง
-            </button>
-            {POSITIONS.map((pos) => {
-              const isActive = selectedPosition === pos.id;
-              const Icon = pos.icon;
-              return (
-                <button
-                  key={pos.id}
-                  onClick={() => setSelectedPosition(pos.id)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 border ${
-                    isActive
-                      ? "bg-[#2f3437] text-white border-[#2f3437]"
-                      : "bg-[#fbfbfa] border-[#e9e9e7] text-[#787774] hover:text-[#2f3437] hover:bg-[#f1f1ef]"
-                  }`}
-                >
-                  <Icon className="w-3 h-3" />
-                  <span>{pos.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* SECTION 3: สร้างเยาวชน */}
-        <div className="notion-card p-5 space-y-4">
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-md bg-[#f7f6f3] border border-[#e9e9e7] flex items-center justify-center">
-              <Sprout className="w-4 h-4 text-[#787774]" />
-            </div>
-            <div>
-              <h3 className="text-xs font-semibold text-[#2f3437]">สร้างเยาวชน</h3>
-              <p className="text-[11px] text-[#787774]">อายุ 16-17 ปี</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={() => handleScoutPlayer(false)}
-              disabled={loadingAction}
-              className="notion-btn-primary px-4 py-2 text-xs disabled:opacity-50"
-            >
-              <Gem className="w-3.5 h-3.5" />
-              <span>40 เพชร</span>
-            </button>
-
-            <button
-              onClick={() => handleScoutPlayer(true)}
-              disabled={loadingAction}
-              className="notion-btn-secondary px-4 py-2 text-xs disabled:opacity-50"
-            >
-              <Coins className="w-3.5 h-3.5 text-[#787774]" />
-              <span>20,000 + 20 เพชร</span>
-            </button>
-          </div>
-
-          <div className="text-[11px] text-[#9b9a97] font-mono">
-            สามารถใช้เหรียญกดได้อีก 4/5 ครั้งในซีซั่นนี้
-          </div>
-        </div>
-
-        {/* SECTION 4: สร้างเยาวชนตั้งชื่อเอง */}
-        <div className="notion-card p-5 space-y-4">
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-md bg-[#f7f6f3] border border-[#e9e9e7] flex items-center justify-center">
-              <PenTool className="w-4 h-4 text-[#787774]" />
-            </div>
-            <div>
-              <h3 className="text-xs font-semibold text-[#2f3437]">สร้างเยาวชนตั้งชื่อเอง</h3>
-              <p className="text-[11px] text-[#787774]">กำหนดชื่อนักเตะเพื่อเข้าสู่อคาเดมี่ของคุณโดยเฉพาะ</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] text-[#787774] block mb-1">ชื่อ</label>
-              <input
-                type="text"
-                value={customFirstName}
-                onChange={(e) => setCustomFirstName(e.target.value)}
-                placeholder="Somchai"
-                className="w-full px-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] focus:outline-none focus:border-[#787774]"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-[#787774] block mb-1">นามสกุล</label>
-              <input
-                type="text"
-                value={customLastName}
-                onChange={(e) => setCustomLastName(e.target.value)}
-                placeholder="Prasert"
-                className="w-full px-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs text-[#2f3437] focus:outline-none focus:border-[#787774]"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-[#9b9a97]">ใช้ตัวอักษร A-Z เท่านั้น</span>
-            <button
-              onClick={handleCreateNamedPlayer}
-              disabled={loadingAction}
-              className="notion-btn-primary px-4 py-2 text-xs disabled:opacity-50"
-            >
-              <Gem className="w-3.5 h-3.5" />
-              <span>80 เพชร</span>
-            </button>
-          </div>
-        </div>
-
-        {/* SECTION 5: ROSTER */}
-        <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Trophy className="w-4 h-4 text-[#787774]" />
-              <h2 className="text-xs font-semibold text-[#2f3437]">
-                รายชื่อนักเตะในอคาเดมี่ ({scoutedRoster.length})
-              </h2>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {scoutedRoster.map((player) => (
-              <div key={player.id} className="notion-card p-3.5 flex items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-xs text-[#2f3437]">{player.name}</span>
-                    <span className="notion-tag text-[10px]">
-                      {player.nationality}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#787774] flex items-center gap-1.5">
-                    <span>{player.position}</span>
-                    <span>•</span>
-                    <span>อายุ {player.age} ปี</span>
-                  </div>
-                  <div className="text-[10px] text-[#9b9a97]">
-                    {player.specialSkill}
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end">
-                  <div className="text-base font-bold text-[#2f3437] font-mono">
-                    {player.overall}
-                  </div>
-                  <div className="text-[9px] text-[#9b9a97] font-mono">
-                    POT {player.potential}
-                  </div>
-                </div>
-              </div>
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-1.5">
+            {GROUP_TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setGroup(t.id)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium ${
+                  group === t.id ? "bg-[#2f3437] text-white" : "bg-[#fbfbfa] border border-[#e9e9e7] text-[#787774] hover:text-[#2f3437]"
+                }`}
+              >
+                {t.label}
+              </button>
             ))}
           </div>
+          <div className="relative sm:w-64">
+            <Search className="w-3.5 h-3.5 text-[#9b9a97] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ค้นหาชื่อ สโมสร หรือประเทศ"
+              className="w-full pl-9 pr-3 py-2 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] text-xs focus:outline-none focus:border-[#787774]"
+            />
+          </div>
         </div>
 
+        {/* List */}
+        {loading && <p className="text-xs text-[#9b9a97]">กำลังโหลด...</p>}
+        {!loading && players.length === 0 && (
+          <div className="notion-card p-8 text-center text-sm text-[#787774]">
+            ยังไม่มีรายชื่อ{isStaff ? " กด “อัปเดตรายชื่อด้วย AI” เพื่อสร้างรายชื่อครั้งแรก" : " ทีมงานกำลังจัดทำ"}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {ranked.map((p) => {
+            const age = ageOf(p.birth_date);
+            const open = expanded === p.id;
+            const sources = parseSources(p.sources);
+            return (
+              <div key={p.id} className={`notion-card p-3 sm:p-4 ${p.hidden ? "opacity-50" : ""}`}>
+                <button className="w-full text-left flex items-start gap-3" onClick={() => setExpanded(open ? null : p.id)}>
+                  <div className="w-9 shrink-0 text-center">
+                    <div className="text-lg font-bold text-[#2f3437] font-mono leading-none">{p.rank ?? "–"}</div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-sm font-semibold text-[#2f3437]">{p.name_th || p.name}</span>
+                      {p.name_th && <span className="text-[11px] text-[#9b9a97]">{p.name}</span>}
+                    </div>
+                    <div className="text-[11px] text-[#787774] flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                      <span>{p.position_th || p.position}</span>
+                      {age !== null && <span>• {age} ปี</span>}
+                      {(p.nationality_th || p.nationality) && <span>• {p.nationality_th || p.nationality}</span>}
+                      {p.club && <span className="text-[#2f3437] font-medium">• {p.club}</span>}
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {p.verified ? (
+                      <span title="ตรวจสอบสโมสร วันเกิด และสัญชาติแล้ว">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      </span>
+                    ) : (
+                      <span title="ยังยืนยันข้อมูลไม่ครบ">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {open && (
+                  <div className="mt-3 pl-12 space-y-2 text-xs text-[#37352f]">
+                    {p.highlight && <p className="leading-relaxed">{p.highlight}</p>}
+                    <div className="text-[11px] text-[#787774] space-y-0.5">
+                      {p.league && <div>ลีก: {p.league}</div>}
+                      {p.birth_date && <div>วันเกิด: {new Date(p.birth_date + "T00:00:00Z").toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}</div>}
+                      {!p.verified && <div className="text-amber-600">ยังยืนยันข้อมูลบางส่วนไม่ได้{p.verify_note ? `: ${p.verify_note}` : ""}</div>}
+                    </div>
+                    {sources.length > 0 && (
+                      <div className="text-[11px] text-[#9b9a97]">
+                        แหล่งข้อมูล:{" "}
+                        {sources.slice(0, 4).map((s, i) => (
+                          <a key={i} href={s.uri} target="_blank" rel="noopener noreferrer" className="underline mr-2 inline-flex items-center gap-0.5">
+                            {s.title || "ลิงก์"} <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {isStaff && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <button onClick={() => editClub(p)} className="notion-btn-secondary px-2.5 py-1 text-[11px]">
+                          <Pencil className="w-3 h-3" /> <span>แก้ไข</span>
+                        </button>
+                        <button onClick={() => toggleHidden(p)} className="notion-btn-secondary px-2.5 py-1 text-[11px]">
+                          {p.hidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          <span>{p.hidden ? "แสดง" : "ซ่อน"}</span>
+                        </button>
+                        <button onClick={() => remove(p)} className="px-2.5 py-1 text-[11px] text-red-600 hover:underline inline-flex items-center gap-1">
+                          <Trash2 className="w-3 h-3" /> ลบ
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
