@@ -1,4 +1,4 @@
-// Real-time Live Football News Feed (Sky Sports & BBC Sport Live Aggregator)
+// Real-time Live Football News Feed with Automatic Thai Translation
 
 interface LiveNewsItem {
   id: string;
@@ -16,6 +16,27 @@ interface LiveNewsItem {
   sourceName: string;
   publishedAt: string;
   readTime: string;
+}
+
+// Translate English sports text into natural Thai
+async function translateToThai(text: string): Promise<string> {
+  if (!text || !text.trim()) return "";
+  try {
+    const cleanText = text.replace(/<[^>]*>/g, "").trim();
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(cleanText)}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (!res.ok) return cleanText;
+    const data: any = await res.json();
+    if (data && data[0] && Array.isArray(data[0])) {
+      const translated = data[0].map((item: any) => item[0]).join("");
+      return translated.trim() || cleanText;
+    }
+    return cleanText;
+  } catch {
+    return text;
+  }
 }
 
 export const onRequestGet = async () => {
@@ -37,30 +58,36 @@ export const onRequestGet = async () => {
         const xml = await res.text();
         const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
 
-        for (const item of itemMatches.slice(0, 8)) {
+        for (const item of itemMatches.slice(0, 5)) {
           const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/);
           const descMatch = item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) || item.match(/<description>(.*?)<\/description>/);
           const linkMatch = item.match(/<link>(.*?)<\/link>/);
           const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
           const imgMatch = item.match(/<media:thumbnail[^>]+url="([^"]+)"/) || item.match(/url="([^"]+)"/);
 
-          const title = titleMatch ? titleMatch[1].trim() : "";
-          const desc = descMatch ? descMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+          const rawTitle = titleMatch ? titleMatch[1].trim() : "";
+          const rawDesc = descMatch ? descMatch[1].replace(/<[^>]*>/g, "").trim() : "";
           const link = linkMatch ? linkMatch[1].trim() : "";
           const dateStr = dateMatch ? dateMatch[1].trim() : "";
           const img = imgMatch ? imgMatch[1].trim() : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80";
 
-          if (title && link) {
+          if (rawTitle && link) {
+            // Translate to Thai in parallel
+            const [thaiTitle, thaiDesc] = await Promise.all([
+              translateToThai(rawTitle),
+              translateToThai(rawDesc),
+            ]);
+
             const timeAgo = formatTimeAgo(dateStr);
-            const slug = slugify(title);
+            const slug = slugify(rawTitle);
 
             results.push({
               id: `live-${slug.slice(0, 30)}`,
               slug,
-              title,
-              excerpt: desc,
-              content: `${desc}\n\nรายงานสดส่งตรงจาก ${feed.name} ติดตามความคืบหน้าอย่างเป็นทางการได้ที่ลิงก์ต้นทาง: ${link}`,
-              category: title.toLowerCase().includes("transfer") ? "transfer" : "breaking",
+              title: thaiTitle,
+              excerpt: thaiDesc,
+              content: `${thaiDesc}\n\n(รายงานข่าวสดจาก ${feed.name} - แหล่งข่าวต้นทาง: ${link})`,
+              category: rawTitle.toLowerCase().includes("transfer") ? "transfer" : "breaking",
               categoryLabel: feed.name.includes("Premier") ? "พรีเมียร์ลีก สด" : "ฟุตบอลโลก สด",
               league: feed.name.includes("Premier") ? "Premier League" : "World Football",
               imageUrl: img,
