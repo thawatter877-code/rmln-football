@@ -19,14 +19,21 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [favoriteClub, setFavoriteClub] = useState("Arsenal");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !email.trim()) return;
+    if (password.length < 8) {
+      setError("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+      return;
+    }
     setLoading(true);
-    await register(username.trim(), email.trim(), password, favoriteClub);
+    setError(null);
+    const result = await register(username.trim(), email.trim(), password, favoriteClub);
     setLoading(false);
-    router.push("/academy");
+    if (result.success) router.push("/academy");
+    else setError(result.error || "สมัครสมาชิกไม่สำเร็จ");
   };
 
   return (
@@ -51,6 +58,11 @@ export default function RegisterPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {error && (
+            <div role="alert" className="p-2.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
+              {error}
+            </div>
+          )}
           <div>
             <label className="text-xs font-medium text-[#2f3437] block mb-1">
               ชื่อผู้ใช้ (Username)

@@ -44,13 +44,51 @@
    - Variable name: `DB`
    - D1 Database: เลือก `rmln_football_db`
 
+### 4. ตั้งค่า Environment Variables (จำเป็น)
+ไปที่ **Settings** > **Variables and Secrets** ของโปรเจกต์ Pages (ทั้ง Production และ Preview):
+
+| ชื่อ | ประเภท | ค่า |
+|---|---|---|
+| `JWT_SECRET` | Secret (Encrypt) | สตริงสุ่มยาว 32 ตัวขึ้นไป เช่นผลจาก `openssl rand -hex 32` |
+| `ADMIN_EMAILS` | Text | อีเมลผู้ดูแลระบบ คั่นด้วยจุลภาค เช่น `you@example.com` |
+
+- ถ้าไม่มี `JWT_SECRET` ระบบสมัครสมาชิก/ล็อกอินจะใช้งานไม่ได้
+- บัญชีที่สมัครหรือล็อกอินด้วยอีเมลใน `ADMIN_EMAILS` จะได้สิทธิ์ admin (เข้า `/admin` เพื่อเขียน/ลบข่าว)
+- หลังเปลี่ยนค่าต้อง **Redeploy** ใหม่หนึ่งครั้ง
+- ผู้ใช้ที่เป็น admin ในระบบ undes-studio (ตาราง `users` ใน D1 เดียวกัน) จะได้สิทธิ์ admin ใน RMLN อัตโนมัติเมื่อสมัคร/ล็อกอินด้วยอีเมลเดียวกัน
+
+### 5. AI เขียนข่าวอัตโนมัติ (Google Gemini)
+เพิ่มใน Cloudflare Pages → Settings → Variables and Secrets:
+
+| ชื่อ | ประเภท | ค่า |
+|---|---|---|
+| `GEMINI_API_KEY` | Secret | API key จาก Google AI Studio (aistudio.google.com) |
+| `GEMINI_MODEL` | Text (ไม่บังคับ) | ค่าเริ่มต้น `gemini-2.5-flash` |
+| `CRON_SECRET` | Secret | สตริงสุ่มยาว 16 ตัวขึ้นไป สำหรับตัวตั้งเวลา |
+
+ขั้นตอนของ AI ต่อข่าว: ดึงข่าวต้นฉบับเต็ม → Gemini เขียนเป็นข่าวไทยชิ้นใหม่ (ใช้เฉพาะข้อเท็จจริงในต้นฉบับ) →
+Gemini อีกรอบตรวจข้อเท็จจริงเทียบต้นฉบับ → ผ่าน = เผยแพร่ทันที / ไม่ผ่าน = เก็บเป็นร่างให้พนักงานตรวจในแท็บ "AI เขียนข่าว"
+
+AI ถูกปลุกให้ทำงาน 3 ทาง:
+1. มีคนเข้าเว็บ (ทุก 10 นาที ครั้งละ 1 ข่าว)
+2. GitHub Actions ทุก 10 นาที (`.github/workflows/ai-desk-cron.yml`) — ใส่ secret `CRON_SECRET` ค่าเดียวกันใน GitHub → Settings → Secrets and variables → Actions
+3. กดปุ่ม "รันตอนนี้" ในห้องข่าว
+
+### 6. ห้องข่าวและพนักงาน (`/admin`)
+- **ข่าวเข้า**: ข่าวจริงจาก Sky Sports / BBC Sport แปลเป็นไทยอัตโนมัติ (แคชคำแปลไว้ในตาราง `rmln_translations`)
+- **เรียบเรียง**: พนักงานตรวจคำแปล เขียนเพิ่ม แล้วเผยแพร่เป็นข่าว RMLN (ข่าวสดตัวเดิมจะถูกซ่อนจากหน้าแรกอัตโนมัติ)
+- **พนักงาน** (admin): ให้พนักงานสมัครสมาชิกก่อน แล้วค้นหาและตั้งเป็น "บรรณาธิการ" (editor)
+- ผลบอล/ตารางคะแนนจริงมาจาก ESPN public API (`/api/football`)
+
 ---
 
 ## 🛠️ ทดสอบบนเครื่อง Local
 
 ```bash
 npm install
-npm run dev
+npm run build
+printf 'JWT_SECRET=local-dev-secret-change-me-0123456789abcdef\nADMIN_EMAILS=you@example.com\n' > .dev.vars
+npx wrangler pages dev out
 ```
 
-เปิดดูที่ `http://localhost:3000`
+เปิดดูที่ `http://localhost:8788` (ต้องใช้ `wrangler pages dev` เพื่อให้ API และ D1 ทำงาน, `npm run dev` จะเห็นแค่หน้าเว็บโดยไม่มีข้อมูล)

@@ -1,90 +1,116 @@
-import { ensureRmlnSchema } from "../_lib/db";
+import { ensureRmlnSchema, requireDb } from "../_lib/db";
+import {
+  Env,
+  json,
+  hashPassword,
+  verifyPassword,
+  createSessionCookie,
+  clearSessionCookie,
+  getSessionUser,
+  shouldBeAdmin,
+  PUBLIC_USER_COLUMNS,
+} from "../_lib/auth";
 
-interface Env {
-  DB?: any;
+const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function loadPublicUser(env: Env, id: string) {
+  return env.DB.prepare(`SELECT ${PUBLIC_USER_COLUMNS} FROM rmln_users WHERE id = ?`).bind(id).first();
 }
 
-async function hashPassword(password: string): Promise<string> {
-  const enc = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(password + "rmln_magic_salt"));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export const onRequestPost = async ({ env, request }: { env: Env; request: Request }) => {
+// GET /api/auth -> current session user (or null)
+export const onRequestGet = async ({ env, request }: { env: Env; request: Request }) => {
+  const missing = requireDb(env);
+  if (missing) return missing;
   try {
-    const body: any = await request.json();
-    const { action, username, email, password, favoriteClub } = body;
+    await ensureRmlnSchema(env.DB);
+    const session = await getSessionUser(request, env);
+    if (!session) return json({ user: null });
+    return json({ user: await loadPublicUser(env, session.id) });
+  } catch (err: any) {
+    return json({ error: err.message }, 500);
+  }
+};
 
-    if (env.DB) {
-      await ensureRmlnSchema(env.DB);
+// POST /api/auth { action: "register" | "login" | "logout", ... }
+export const onRequestPost = async ({ env, request }: { env: Env; request: Request }) => {
+  const missing = requireDb(env);
+  if (missing) return missing;
 
-      if (action === "register") {
-        if (!username || !email || !password) {
-          return new Response(JSON.stringify({ error: "กรุณากรอกข้อมูลให้ครบถ้วน" }), { status: 400 });
-        }
+  try {
+    const body: any = await request.json().catch(() => ({}));
+    const action = body.action;
+    await ensureRmlnSchema(env.DB);
 
-        const existing = await env.DB.prepare(
-          "SELECT id FROM rmln_users WHERE username = ? OR email = ?"
-        ).bind(username, email).first();
-
-        if (existing) {
-          return new Response(JSON.stringify({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }), { status: 400 });
-        }
-
-        const userId = `u-${Date.now()}`;
-        const pwdHash = await hashPassword(password);
-
-        await env.DB.prepare(`
-          INSERT INTO rmln_users (id, username, email, password_hash, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad)
-          VALUES (?, ?, ?, ?, ?, ?, 198000, 282, 'D4', 23, 50)
-        `).bind(
-          userId,
-          username.trim(),
-          email.trim().toLowerCase(),
-          pwdHash,
-          username.trim(),
-          favoriteClub || "Arsenal"
-        ).run();
-
-        const user = await env.DB.prepare(
-          "SELECT id, username, email, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad FROM rmln_users WHERE id = ?"
-        ).bind(userId).first();
-
-        return new Response(JSON.stringify({ success: true, user }), {
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      if (action === "login") {
-        if (!username || !password) {
-          return new Response(JSON.stringify({ error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" }), { status: 400 });
-        }
-
-        const user = await env.DB.prepare(
-          "SELECT * FROM rmln_users WHERE username = ? OR email = ?"
-        ).bind(username, username.toLowerCase()).first();
-
-        if (!user) {
-          return new Response(JSON.stringify({ error: "ไม่พบบัญชีผู้ใช้นี้" }), { status: 401 });
-        }
-
-        const pwdHash = await hashPassword(password);
-        if (user.password_hash !== pwdHash) {
-          return new Response(JSON.stringify({ error: "รหัสผ่านไม่ถูกต้อง" }), { status: 401 });
-        }
-
-        const { password_hash, ...safeUser } = user;
-        return new Response(JSON.stringify({ success: true, user: safeUser }), {
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+    if (action === "logout") {
+      return json({ success: true }, 200, { "Set-Cookie": clearSessionCookie() });
     }
 
-    return new Response(JSON.stringify({ success: true, user: body }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    if (action === "register") {
+      const username = String(body.username || "").trim();
+      const email = String(body.email || "").trim().toLowerCase();
+      const password = String(body.password || "");
+      const favoriteClub = String(body.favoriteClub || "Arsenal").slice(0, 60);
+
+      if (!USERNAME_RE.test(username)) {
+        return json({ error: "ชื่อผู้ใช้ต้องเป็น a-z, 0-9, _ หรือ . ความยาว 3-24 ตัวอักษร" }, 400);
+      }
+      if (!EMAIL_RE.test(email)) return json({ error: "รูปแบบอีเมลไม่ถูกต้อง" }, 400);
+      if (password.length < 8) return json({ error: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" }, 400);
+
+      const existing = await env.DB.prepare("SELECT id FROM rmln_users WHERE username = ? OR email = ?")
+        .bind(username, email)
+        .first();
+      if (existing) return json({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }, 400);
+
+      const userId = `u-${crypto.randomUUID()}`;
+      const role = (await shouldBeAdmin(env, email)) ? "admin" : "member";
+
+      await env.DB.prepare(
+        `INSERT INTO rmln_users (id, username, email, password_hash, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad, role)
+         VALUES (?, ?, ?, ?, ?, ?, 100000, 200, 'D4', 0, 50, ?)`
+      )
+        .bind(userId, username, email, await hashPassword(password), username, favoriteClub, role)
+        .run();
+
+      const cookie = await createSessionCookie(env, { id: userId, username, role }, request);
+      return json({ success: true, user: await loadPublicUser(env, userId) }, 200, { "Set-Cookie": cookie });
+    }
+
+    if (action === "login") {
+      const identifier = String(body.username || "").trim();
+      const password = String(body.password || "");
+      if (!identifier || !password) return json({ error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" }, 400);
+
+      const user = await env.DB.prepare("SELECT * FROM rmln_users WHERE username = ? OR email = ?")
+        .bind(identifier, identifier.toLowerCase())
+        .first();
+
+      // Same message for unknown user / wrong password to avoid account enumeration
+      const invalid = () => json({ error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" }, 401);
+      if (!user) return invalid();
+
+      const { ok, needsRehash } = await verifyPassword(password, user.password_hash);
+      if (!ok) return invalid();
+
+      if (needsRehash) {
+        await env.DB.prepare("UPDATE rmln_users SET password_hash = ? WHERE id = ?")
+          .bind(await hashPassword(password), user.id)
+          .run();
+      }
+
+      let role = user.role || "member";
+      if (role !== "admin" && (await shouldBeAdmin(env, user.email))) {
+        role = "admin";
+        await env.DB.prepare("UPDATE rmln_users SET role = 'admin' WHERE id = ?").bind(user.id).run();
+      }
+
+      const cookie = await createSessionCookie(env, { id: user.id, username: user.username, role }, request);
+      return json({ success: true, user: await loadPublicUser(env, user.id) }, 200, { "Set-Cookie": cookie });
+    }
+
+    return json({ error: "Unknown action" }, 400);
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return json({ error: err.message }, 500);
   }
 };

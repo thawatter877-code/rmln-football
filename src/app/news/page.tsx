@@ -3,8 +3,8 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Eye, MessageSquare, Clock, Flame, ArrowLeftRight, BookOpen, Compass } from "lucide-react";
-import { MOCK_NEWS } from "@/data/mockNews";
+import { Eye, ExternalLink, Clock, Flame, ArrowLeftRight, BookOpen, Compass } from "lucide-react";
+import { loadNewsFeed, articleHref, timeAgo, matchesFilter, NewsArticle, FALLBACK_IMAGE, handleImgError } from "@/lib/news";
 
 function NewsListContent() {
   const searchParams = useSearchParams();
@@ -12,6 +12,18 @@ function NewsListContent() {
   const leagueParam = searchParams.get("league");
 
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [allNews, setAllNews] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    loadNewsFeed()
+      .then((feed) => {
+        setAllNews(feed.articles);
+        setErrors(feed.errors);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     if (categoryParam) {
@@ -23,12 +35,7 @@ function NewsListContent() {
     }
   }, [categoryParam, leagueParam]);
 
-  const filteredNews = MOCK_NEWS.filter((n) => {
-    if (activeFilter === "all") return true;
-    if (n.category.toLowerCase() === activeFilter.toLowerCase()) return true;
-    if (n.league.toLowerCase().includes(activeFilter.toLowerCase())) return true;
-    return false;
-  });
+  const filteredNews = allNews.filter((n) => matchesFilter(n, activeFilter));
 
   return (
     <div className="min-h-screen bg-white text-[#2f3437] py-8 px-4 sm:px-6">
@@ -76,18 +83,28 @@ function NewsListContent() {
           </div>
         </div>
 
+        {errors.map((e) => (
+          <p key={e} className="text-xs text-red-600">{e}</p>
+        ))}
+        {loading && <p className="text-xs text-[#9b9a97]">กำลังโหลดข่าว...</p>}
+        {!loading && filteredNews.length === 0 && (
+          <p className="text-sm text-[#787774] py-12 text-center">ยังไม่มีข่าวในหมวดนี้</p>
+        )}
+
         {/* News Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredNews.map((news) => (
             <Link
               key={news.id}
-              href={`/news/${news.slug}`}
+              href={articleHref(news)}
               className="notion-card block p-4 group"
             >
               <div className="space-y-3">
                 <div className="aspect-[16/10] w-full rounded-md overflow-hidden bg-[#f1f1ef] border border-[#e9e9e7]">
                   <img
                     src={news.imageUrl}
+                    loading="lazy"
+                    onError={handleImgError}
                     alt={news.title}
                     className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
                   />
@@ -97,7 +114,7 @@ function NewsListContent() {
                   <div className="flex items-center gap-2 text-[11px] text-[#9b9a97]">
                     <span className="font-medium text-[#787774]">{news.league}</span>
                     <span>•</span>
-                    <span>{news.publishedAt}</span>
+                    <span>{timeAgo(news.publishedAt)}</span>
                   </div>
                   <h2 className="text-sm font-semibold text-[#2f3437] group-hover:text-black transition-colors line-clamp-2 leading-snug">
                     {news.title}
@@ -111,12 +128,15 @@ function NewsListContent() {
               <div className="flex items-center justify-between text-[11px] text-[#9b9a97] pt-3 border-t border-[#f1f1ef] mt-4">
                 <span className="font-medium text-[#787774]">{news.author}</span>
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1">
-                    <Eye className="w-3 h-3" /> {news.views.toLocaleString()}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="w-3 h-3" /> {news.comments.length}
-                  </span>
+                  {news.isLive ? (
+                    <span className="flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" /> {news.sourceName}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <Eye className="w-3 h-3" /> {news.views.toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
             </Link>
