@@ -87,8 +87,8 @@ export default function Navbar() {
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-4">
         {/* LOGO */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-md bg-[#2f3437] text-white flex items-center justify-center font-bold text-xs tracking-tight shadow-xs">
-            RL
+          <div className="w-8 h-8 rounded-md bg-[#2f3437] flex items-center justify-center p-1.5 tracking-tight shadow-xs">
+            <img src="/logo.svg" alt="RMLN" className="w-full h-full object-contain" />
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-sm tracking-tight text-[#2f3437] group-hover:text-black transition-colors">
