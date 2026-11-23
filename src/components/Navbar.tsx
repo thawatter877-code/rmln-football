@@ -20,18 +20,20 @@ import {
   FileText
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { loadNewsFeed, articleHref, timeAgo, NewsArticle } from "@/lib/news";
+import { loadNewsFeed, articleHref, NewsArticle, loadFootball, pickMatches, matchCenterText, Match } from "@/lib/news";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isStaff } = useAuth();
+  const [matches, setMatches] = useState<Match[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [latest, setLatest] = useState<NewsArticle[]>([]);
 
   useEffect(() => {
     loadNewsFeed()
-      .then((feed) => setLatest(feed.articles.slice(0, 3)))
+      .then((feed) => setLatest(feed.articles.slice(0, 1)))
       .catch(() => {});
+    loadFootball().then((d) => setMatches(pickMatches(d.matches, 3)));
   }, []);
 
   const navLinks = [
@@ -66,13 +68,18 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Other recent headlines */}
-          <div className="hidden lg:flex items-center gap-4 text-[11px] text-[#787774] min-w-0">
-            {latest.slice(1, 3).map((n) => (
-              <Link key={n.id} href={articleHref(n)} className="truncate max-w-[260px] hover:text-[#2f3437]">
-                <span className="text-[#9b9a97] mr-1">{timeAgo(n.publishedAt)}</span>
-                {n.title}
-              </Link>
+          {/* Real match ticker (ESPN) */}
+          <div className="hidden md:flex items-center gap-5 overflow-x-auto text-[11px] text-[#787774] shrink-0">
+            {matches.map((f) => (
+              <div key={f.id} className="flex items-center gap-1.5 whitespace-nowrap">
+                {f.state === "in" && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                <span className="text-[#9b9a97]">{f.league.split(" ")[0]}</span>
+                <span className="text-[#37352f] font-medium">{f.homeTeam}</span>
+                <span className="px-1.5 py-0.5 bg-white border border-[#e9e9e7] rounded text-[#2f3437] font-mono font-semibold">
+                  {matchCenterText(f)}
+                </span>
+                <span className="text-[#37352f] font-medium">{f.awayTeam}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -96,7 +103,7 @@ export default function Navbar() {
         </Link>
 
         {/* NAVIGATION LINKS */}
-        <nav className="hidden lg:flex items-center gap-1">
+        <nav className="hidden xl:flex items-center gap-1">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
@@ -104,7 +111,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap ${
                   isActive
                     ? "bg-[#f1f1ef] text-[#2f3437] font-semibold"
                     : "text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3]"
@@ -145,7 +152,7 @@ export default function Navbar() {
                     {user.favoriteClub}
                   </span>
                 </div>
-                {isAdmin && (
+                {isStaff && (
                   <Link
                     href="/admin"
                     title="ระบบจัดการข่าวสาร"
@@ -185,7 +192,7 @@ export default function Navbar() {
         {/* MOBILE TOGGLE */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="lg:hidden p-1.5 rounded-md border border-[#e9e9e7] text-[#787774]"
+          className="xl:hidden p-1.5 rounded-md border border-[#e9e9e7] text-[#787774]"
           aria-label="Toggle menu"
         >
           {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -194,7 +201,7 @@ export default function Navbar() {
 
       {/* MOBILE DRAWER */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-[#e9e9e7] bg-white p-4 space-y-3">
+        <div className="xl:hidden border-t border-[#e9e9e7] bg-white p-4 space-y-3">
           <nav className="flex flex-col space-y-1">
             {navLinks.map((link) => {
               const Icon = link.icon;

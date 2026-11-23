@@ -7,7 +7,7 @@ import {
   createSessionCookie,
   clearSessionCookie,
   getSessionUser,
-  isAdminEmail,
+  shouldBeAdmin,
   PUBLIC_USER_COLUMNS,
 } from "../_lib/auth";
 
@@ -64,7 +64,7 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       if (existing) return json({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }, 400);
 
       const userId = `u-${crypto.randomUUID()}`;
-      const role = isAdminEmail(env, email) ? "admin" : "member";
+      const role = (await shouldBeAdmin(env, email)) ? "admin" : "member";
 
       await env.DB.prepare(
         `INSERT INTO rmln_users (id, username, email, password_hash, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad, role)
@@ -100,7 +100,7 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       }
 
       let role = user.role || "member";
-      if (role !== "admin" && isAdminEmail(env, user.email)) {
+      if (role !== "admin" && (await shouldBeAdmin(env, user.email))) {
         role = "admin";
         await env.DB.prepare("UPDATE rmln_users SET role = 'admin' WHERE id = ?").bind(user.id).run();
       }

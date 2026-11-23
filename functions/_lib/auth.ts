@@ -129,5 +129,32 @@ export function isAdminEmail(env: Env, email: string): boolean {
   return list.includes(email.trim().toLowerCase());
 }
 
+/**
+ * RMLN shares its D1 database with undes-studio. An email that is an admin in undes-studio's
+ * `users` table is treated as an RMLN admin too. Fails closed if that table doesn't exist.
+ */
+export async function isUndesStudioAdmin(env: Env, email: string): Promise<boolean> {
+  if (!env.DB) return false;
+  const row = await env.DB.prepare("SELECT role FROM users WHERE lower(email) = ? LIMIT 1")
+    .bind(email.trim().toLowerCase())
+    .first()
+    .catch(() => null);
+  return row?.role === "admin";
+}
+
+export async function shouldBeAdmin(env: Env, email: string): Promise<boolean> {
+  return isAdminEmail(env, email) || (await isUndesStudioAdmin(env, email));
+}
+
+export const STAFF_ROLES = ["admin", "editor"];
+
+/** Returns the session user if they have one of the roles, otherwise a 401/403 Response. */
+export async function requireRole(request: Request, env: Env, roles: string[]): Promise<SessionUser | Response> {
+  const session = await getSessionUser(request, env);
+  if (!session) return json({ error: "กรุณาเข้าสู่ระบบ" }, 401);
+  if (!roles.includes(session.role)) return json({ error: "คุณไม่มีสิทธิ์ทำรายการนี้" }, 403);
+  return session;
+}
+
 export const PUBLIC_USER_COLUMNS =
   "id, username, email, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad, role";

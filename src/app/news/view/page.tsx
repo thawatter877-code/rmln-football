@@ -223,6 +223,22 @@ function ArticleView() {
           {article.content}
         </div>
 
+        {(article.autoTranslated || (article.originalTitle && article.originalTitle !== article.title)) && (
+          <div className="text-[11px] text-[#9b9a97] border-l-2 border-[#e9e9e7] pl-3 space-y-0.5">
+            {article.autoTranslated && <p>ข่าวนี้แปลอัตโนมัติจาก {article.sourceName} อาจมีความคลาดเคลื่อน</p>}
+            {article.originalTitle && <p lang="en">หัวข้อต้นฉบับ: {article.originalTitle}</p>}
+          </div>
+        )}
+
+        {!article.isLive && article.sourceUrl && (
+          <p className="text-xs text-[#787774]">
+            อ้างอิง:{" "}
+            <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-[#2f3437]">
+              {article.sourceName || article.sourceUrl}
+            </a>
+          </p>
+        )}
+
         {article.isLive && article.sourceUrl && (
           <a
             href={article.sourceUrl}

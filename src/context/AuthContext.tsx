@@ -23,6 +23,8 @@ interface AuthContextType {
   /** true until the initial session check finishes */
   loading: boolean;
   isAdmin: boolean;
+  /** admin or editor (news desk access) */
+  isStaff: boolean;
   login: (emailOrUser: string, pass: string) => Promise<Result>;
   register: (username: string, email: string, pass: string, club: string) => Promise<Result>;
   logout: () => Promise<void>;
@@ -35,6 +37,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isAdmin: false,
+  isStaff: false,
   login: async () => ({ success: false }),
   register: async () => ({ success: false }),
   logout: async () => {},
@@ -134,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, isAdmin: user?.role === "admin", login, register, logout, setUserFromServer, refresh }}
+      value={{ user, loading, isAdmin: user?.role === "admin", isStaff: user?.role === "admin" || user?.role === "editor", login, register, logout, setUserFromServer, refresh }}
     >
       {children}
     </AuthContext.Provider>

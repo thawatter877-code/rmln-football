@@ -107,11 +107,24 @@ export async function ensureRmlnSchema(db: any) {
       "ALTER TABLE rmln_news ADD COLUMN read_time TEXT DEFAULT '3 นาที'",
       "ALTER TABLE rmln_scouted_players ADD COLUMN overall INTEGER DEFAULT 70",
       "ALTER TABLE rmln_scouted_players ADD COLUMN special_skill TEXT",
+      "ALTER TABLE rmln_news ADD COLUMN source_url TEXT",
+      "ALTER TABLE rmln_news ADD COLUMN source_name TEXT",
+      "ALTER TABLE rmln_news ADD COLUMN original_title TEXT",
+      "ALTER TABLE rmln_news ADD COLUMN created_by TEXT",
     ];
     for (const sql of migrations) {
       // Fails harmlessly with "duplicate column" when the column already exists
       await db.prepare(sql).run().catch(() => {});
     }
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS rmln_translations (
+        hash TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        th TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run().catch(() => {});
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_rmln_news_source ON rmln_news(source_url)").run().catch(() => {});
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_rmln_comments_news ON rmln_comments(news_id)").run().catch(() => {});
     await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_rmln_reactions_user ON rmln_reactions(news_id, user_id)").run().catch(() => {});
 

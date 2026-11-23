@@ -19,7 +19,19 @@ import {
   Radio,
   ExternalLink
 } from "lucide-react";
-import { loadNewsFeed, articleHref, timeAgo, matchesFilter, NewsArticle, FALLBACK_IMAGE, handleImgError } from "@/lib/news";
+import {
+  loadNewsFeed,
+  articleHref,
+  timeAgo,
+  matchesFilter,
+  NewsArticle,
+  handleImgError,
+  loadFootball,
+  pickMatches,
+  matchCenterText,
+  matchStatusLabel,
+  FootballData,
+} from "@/lib/news";
 
 export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -27,6 +39,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [liveCount, setLiveCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+  const [football, setFootball] = useState<FootballData | null>(null);
 
   useEffect(() => {
     loadNewsFeed()
@@ -36,6 +49,7 @@ export default function HomePage() {
         setErrors(feed.errors);
       })
       .finally(() => setLoading(false));
+    loadFootball().then(setFootball);
   }, []);
 
   // Prefer an editor-marked featured story, otherwise the newest article
@@ -74,7 +88,7 @@ export default function HomePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="notion-tag text-[#2f3437] font-semibold bg-[#f1f1ef]">
                   <Activity className="w-3 h-3 text-[#2f3437]" />
-                  {featuredNews.isLive ? `ข่าวจาก ${featuredNews.sourceName}` : "รายงานพิเศษ RMLN"}
+                  {featuredNews.isLive ? "LIVE FEED ข่าวสดเรียลไทม์" : "รายงานพิเศษ RMLN"}
                 </span>
                 <span className="notion-tag font-mono text-[#787774]">
                   {featuredNews.league}
@@ -101,6 +115,12 @@ export default function HomePage() {
                 <span className="text-[#37352f] font-medium">{featuredNews.author}</span>
                 <span>•</span>
                 <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {timeAgo(featuredNews.publishedAt)}</span>
+                {featuredNews.autoTranslated && (
+                  <>
+                    <span>•</span>
+                    <span title={featuredNews.originalTitle}>แปลอัตโนมัติจาก {featuredNews.sourceName}</span>
+                  </>
+                )}
                 {!featuredNews.isLive && (
                   <>
                     <span>•</span>
@@ -213,6 +233,12 @@ export default function HomePage() {
                           <span>{news.categoryLabel}</span>
                           <span>•</span>
                           <span>{timeAgo(news.publishedAt)}</span>
+                          {news.autoTranslated && (
+                            <>
+                              <span>•</span>
+                              <span title={news.originalTitle}>แปลอัตโนมัติ</span>
+                            </>
+                          )}
                         </div>
                         <h2 className="text-base font-semibold text-[#2f3437] group-hover:text-black transition-colors line-clamp-2 leading-snug">
                           {news.title}
@@ -272,20 +298,91 @@ export default function HomePage() {
           {/* RIGHT 4 COLS: SIDEBAR */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* SOURCES */}
-            <div className="notion-card p-4 space-y-2.5">
-              <div className="flex items-center gap-1.5 border-b border-[#e9e9e7] pb-2.5">
-                <Radio className="w-4 h-4 text-[#787774]" />
-                <h3 className="text-xs font-semibold text-[#2f3437]">แหล่งข่าว</h3>
+            {/* 1. MATCH CENTER (real data from ESPN) */}
+            {football && football.matches.length > 0 && (
+              <div className="notion-card p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#e9e9e7] pb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4 text-[#787774]" />
+                    <h3 className="text-xs font-semibold text-[#2f3437]">ผลและโปรแกรมการแข่งขัน</h3>
+                  </div>
+                  <span className="text-[10px] text-[#9b9a97] font-mono">MATCH CENTER</span>
+                </div>
+
+                <div className="space-y-2">
+                  {pickMatches(football.matches, 6).map((fix) => (
+                    <div key={fix.id} className="p-2.5 rounded-md bg-[#fbfbfa] border border-[#e9e9e7] space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-[#9b9a97]">
+                        <span className="font-medium text-[#787774]">{fix.league}</span>
+                        <span className={`font-mono font-medium ${fix.state === "in" ? "text-red-600" : "text-[#2f3437]"}`}>
+                          {matchStatusLabel(fix)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-xs font-medium text-[#2f3437] pt-0.5">
+                        <span className="flex items-center gap-1.5 min-w-0 flex-1">
+                          {fix.homeLogo && <img src={fix.homeLogo} alt="" className="w-4 h-4 object-contain" loading="lazy" />}
+                          <span className="truncate">{fix.homeTeam}</span>
+                        </span>
+                        <span className="px-2 bg-white border border-[#e9e9e7] rounded text-[11px] font-mono font-semibold whitespace-nowrap">
+                          {matchCenterText(fix)}
+                        </span>
+                        <span className="flex items-center justify-end gap-1.5 min-w-0 flex-1">
+                          <span className="truncate text-right">{fix.awayTeam}</span>
+                          {fix.awayLogo && <img src={fix.awayLogo} alt="" className="w-4 h-4 object-contain" loading="lazy" />}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#9b9a97] text-right">ข้อมูล: ESPN</p>
               </div>
-              <ul className="text-xs text-[#787774] space-y-1.5">
-                <li>กองบรรณาธิการ RMLN: {newsList.filter((n) => !n.isLive).length} ข่าว</li>
-                <li>Sky Sports / BBC Sport (RSS): {liveCount} ข่าว</li>
-              </ul>
-              {errors.map((e) => (
-                <p key={e} className="text-[11px] text-red-600">{e}</p>
-              ))}
-            </div>
+            )}
+
+            {/* 2. LEAGUE STANDINGS (real data from ESPN) */}
+            {football && football.standings.length > 0 && (
+              <div className="notion-card p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#e9e9e7] pb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-[#787774]" />
+                    <h3 className="text-xs font-semibold text-[#2f3437]">ตารางคะแนนพรีเมียร์ลีก</h3>
+                  </div>
+                  <span className="text-[10px] text-[#9b9a97] font-mono">TOP 6</span>
+                </div>
+
+                <div className="space-y-1 text-xs font-mono">
+                  <div className="grid grid-cols-12 text-[10px] text-[#9b9a97] px-2 py-1 font-sans border-b border-[#f1f1ef]">
+                    <span className="col-span-1">#</span>
+                    <span className="col-span-6">สโมสร</span>
+                    <span className="col-span-2 text-center">แข่ง</span>
+                    <span className="col-span-1 text-center">+/-</span>
+                    <span className="col-span-2 text-right">แต้ม</span>
+                  </div>
+                  {football.standings.slice(0, 6).map((row) => (
+                    <div
+                      key={row.team}
+                      className={`grid grid-cols-12 px-2 py-1.5 rounded items-center ${row.rank <= 4 ? "bg-[#fbfbfa]" : ""}`}
+                    >
+                      <span className="col-span-1 text-[#9b9a97] font-medium">{row.rank}</span>
+                      <span className="col-span-6 font-sans font-medium text-[#2f3437] truncate flex items-center gap-1.5">
+                        {row.logo && <img src={row.logo} alt="" className="w-4 h-4 object-contain" loading="lazy" />}
+                        {row.team}
+                      </span>
+                      <span className="col-span-2 text-center text-[#787774]">{row.played}</span>
+                      <span className="col-span-1 text-center text-[#787774]">{row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff}</span>
+                      <span className="col-span-2 text-right text-[#2f3437] font-bold">{row.points}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {errors.length > 0 && (
+              <div className="notion-card p-3 space-y-1">
+                {errors.map((e) => (
+                  <p key={e} className="text-[11px] text-red-600">{e}</p>
+                ))}
+              </div>
+            )}
 
             {/* 3. SIGN UP CALLOUT */}
             <div className="notion-callout p-4 text-center space-y-2.5">

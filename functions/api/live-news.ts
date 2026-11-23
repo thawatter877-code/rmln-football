@@ -1,11 +1,20 @@
-// Real-time Live Football News Feed (Sky Sports & BBC Sport Live Aggregator)
+// Live football news from Sky Sports & BBC Sport RSS, auto-translated to Thai (cached in D1)
+import { ensureRmlnSchema } from "../_lib/db";
+import { translateGroupToThai } from "../_lib/translate";
+
+interface Env {
+  DB?: any;
+}
 
 interface LiveNewsItem {
   id: string;
   slug: string;
-  title: string;
+  title: string; // Thai if translation succeeded, else original English
   excerpt: string;
   content: string;
+  titleOriginal: string;
+  excerptOriginal: string;
+  translated: boolean;
   category: string;
   categoryLabel: string;
   league: string;
@@ -18,79 +27,115 @@ interface LiveNewsItem {
   readTime: string;
 }
 
-export const onRequestGet = async () => {
+const FEEDS = [
+  { name: "Sky Sports", url: "https://www.skysports.com/rss/11095", league: "Premier League", label: "พรีเมียร์ลีก" },
+  { name: "BBC Sport", url: "https://feeds.bbci.co.uk/sport/football/rss.xml", league: "World Football", label: "ฟุตบอลต่างประเทศ" },
+];
+const PER_FEED = 8;
+
+export const onRequestGet = async ({ env, request }: { env: Env; request: Request }) => {
+  const translate = new URL(request.url).searchParams.get("translate") !== "0";
   try {
-    const feeds = [
-      { name: "Sky Sports Premier League", url: "https://www.skysports.com/rss/11095" },
-      { name: "BBC Sport Football", url: "https://feeds.bbci.co.uk/sport/football/rss.xml" },
-    ];
+    if (env.DB) await ensureRmlnSchema(env.DB);
 
-    const results: LiveNewsItem[] = [];
-
-    for (const feed of feeds) {
-      try {
-        const res = await fetch(feed.url, {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RMLN-Football-Agent/1.0" },
-        });
-
-        if (!res.ok) continue;
-        const xml = await res.text();
-        const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
-
-        for (const item of itemMatches.slice(0, 8)) {
-          const titleMatch = item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/);
-          const descMatch = item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) || item.match(/<description>([\s\S]*?)<\/description>/);
-          const linkMatch = item.match(/<link>(.*?)<\/link>/);
-          const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
-          const imgMatch = item.match(/<media:thumbnail[^>]+url="([^"]+)"/) || item.match(/url="([^"]+)"/);
-
-          const title = titleMatch ? decodeEntities(titleMatch[1].trim()) : "";
-          const desc = descMatch ? decodeEntities(descMatch[1].replace(/<[^>]*>/g, "").trim()) : "";
-          const link = linkMatch ? linkMatch[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim() : "";
-          const dateStr = dateMatch ? dateMatch[1].trim() : "";
-          const img = imgMatch ? decodeEntities(imgMatch[1].trim()) : "";
-
-          if (title && link) {
-            const parsed = new Date(dateStr);
-            const publishedIso = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
-            const slug = `live-${await shortHash(link)}`;
-
-            results.push({
-              id: slug,
-              slug,
-              title,
-              excerpt: desc,
-              content: desc,
-              category: title.toLowerCase().includes("transfer") ? "transfer" : "breaking",
-              categoryLabel: feed.name.includes("Premier") ? "พรีเมียร์ลีก" : "ฟุตบอลต่างประเทศ",
-              league: feed.name.includes("Premier") ? "Premier League" : "World Football",
-              imageUrl: img,
-              views: 0,
-              author: feed.name,
-              sourceUrl: link,
-              sourceName: feed.name,
-              publishedAt: publishedIso,
-              readTime: "2 นาที",
-            });
-          }
+    // 1. Fetch + parse all feeds in parallel
+    const perFeed = await Promise.all(
+      FEEDS.map(async (feed) => {
+        try {
+          const res = await fetch(feed.url, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; RMLN-Football/1.0)" },
+            cf: { cacheTtl: 300, cacheEverything: true },
+          } as RequestInit);
+          if (!res.ok) return [];
+          return parseFeed(await res.text(), feed);
+        } catch {
+          return [];
         }
-      } catch {
-        // Continue to next feed if one fails
+      })
+    );
+
+    // De-duplicate by link
+    const seen = new Set<string>();
+    const items = perFeed.flat().filter((i) => (seen.has(i.sourceUrl) ? false : (seen.add(i.sourceUrl), true)));
+
+    // 2. Translate title + summary per item (one request each, cached in D1), 4 at a time
+    if (translate) {
+      for (let i = 0; i < items.length; i += 4) {
+        await Promise.all(
+          items.slice(i, i + 4).map(async (item) => {
+            const [t, d] = await translateGroupToThai(env.DB, [item.titleOriginal, item.excerptOriginal]);
+            if (t) {
+              item.title = t;
+              item.excerpt = d || item.excerptOriginal;
+              item.content = item.excerpt;
+              item.translated = true;
+            }
+          })
+        );
       }
     }
 
-    results.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    items.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 
-    return new Response(JSON.stringify({ success: true, count: results.length, liveNews: results }), {
+    return new Response(JSON.stringify({ success: true, count: items.length, liveNews: items }), {
       headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=180, s-maxage=300",
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "public, max-age=120",
       },
     });
   } catch (err: any) {
     return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500 });
   }
 };
+
+async function parseFeed(xml: string, feed: (typeof FEEDS)[number]): Promise<LiveNewsItem[]> {
+  const out: LiveNewsItem[] = [];
+  const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
+
+  for (const item of itemMatches.slice(0, PER_FEED)) {
+    const title = decodeEntities(tag(item, "title"));
+    const desc = decodeEntities(tag(item, "description").replace(/<[^>]*>/g, "")).trim();
+    const link = tag(item, "link").trim();
+    const dateStr = tag(item, "pubDate").trim();
+    const imgMatch =
+      item.match(/<media:thumbnail[^>]+url="([^"]+)"/) ||
+      item.match(/<media:content[^>]+url="([^"]+)"/) ||
+      item.match(/<enclosure[^>]+url="([^"]+)"/);
+    const img = imgMatch ? decodeEntities(imgMatch[1].trim()) : "";
+    if (!title || !link) continue;
+
+    const parsed = new Date(dateStr);
+    const slug = `live-${await shortHash(link)}`;
+    out.push({
+      id: slug,
+      slug,
+      title,
+      excerpt: desc,
+      content: desc,
+      titleOriginal: title,
+      excerptOriginal: desc,
+      translated: false,
+      category: /transfer|sign|deal|bid/i.test(title) ? "transfer" : "breaking",
+      categoryLabel: feed.label,
+      league: feed.league,
+      // BBC thumbnails are tiny (240px); ask their image CDN for a larger one
+      imageUrl: img.replace(/\/ace\/standard\/\d+\//, "/ace/standard/976/"),
+      views: 0,
+      author: feed.name,
+      sourceUrl: link,
+      sourceName: feed.name,
+      publishedAt: isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString(),
+      readTime: "2 นาที",
+    });
+  }
+  return out;
+}
+
+function tag(xml: string, name: string): string {
+  const m = xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`));
+  if (!m) return "";
+  return m[1].replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, "$1").trim();
+}
 
 async function shortHash(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text));

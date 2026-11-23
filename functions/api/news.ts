@@ -1,5 +1,5 @@
 import { ensureRmlnSchema, requireDb } from "../_lib/db";
-import { Env, json, getSessionUser } from "../_lib/auth";
+import { Env, json, requireRole, STAFF_ROLES } from "../_lib/auth";
 
 const CATEGORIES: Record<string, string> = {
   breaking: "ข่าวด่วน",
@@ -25,13 +25,6 @@ function slugify(text: string): string {
 function estimateReadTime(content: string): string {
   const minutes = Math.max(1, Math.round(content.length / 900));
   return `${minutes} นาที`;
-}
-
-async function requireAdmin(request: Request, env: Env): Promise<Response | null> {
-  const session = await getSessionUser(request, env);
-  if (!session) return json({ error: "กรุณาเข้าสู่ระบบ" }, 401);
-  if (session.role !== "admin") return json({ error: "เฉพาะผู้ดูแลระบบเท่านั้น" }, 403);
-  return null;
 }
 
 // GET /api/news?slug=... | ?category=... | ?league=...
@@ -73,15 +66,15 @@ export const onRequestGet = async ({ env, request }: { env: Env; request: Reques
   }
 };
 
-// POST /api/news (admin only) -> create article
+// POST /api/news (staff: admin/editor) -> create article
 export const onRequestPost = async ({ env, request }: { env: Env; request: Request }) => {
   const missing = requireDb(env);
   if (missing) return missing;
 
   try {
     await ensureRmlnSchema(env.DB);
-    const denied = await requireAdmin(request, env);
-    if (denied) return denied;
+    const session = await requireRole(request, env, STAFF_ROLES);
+    if (session instanceof Response) return session;
 
     const body: any = await request.json().catch(() => ({}));
     const title = String(body.title || "").trim();
@@ -92,6 +85,12 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
     const category = CATEGORIES[body.category] ? body.category : "breaking";
     const imageUrl = String(body.imageUrl || "").trim();
     if (imageUrl && !/^https:\/\//i.test(imageUrl)) return json({ error: "ลิงก์รูปภาพต้องขึ้นต้นด้วย https://" }, 400);
+    const sourceUrl = String(body.sourceUrl || "").trim();
+    if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) return json({ error: "ลิงก์แหล่งข่าวไม่ถูกต้อง" }, 400);
+    if (sourceUrl) {
+      const dup = await env.DB.prepare("SELECT slug FROM rmln_news WHERE source_url = ?").bind(sourceUrl).first();
+      if (dup) return json({ error: "ข่าวนี้ถูกเรียบเรียงและเผยแพร่ไปแล้ว", slug: dup.slug }, 409);
+    }
 
     // Make the slug unique
     const baseSlug = slugify(title);
@@ -103,8 +102,9 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
     const id = `n-${crypto.randomUUID()}`;
     await env.DB.prepare(
       `INSERT INTO rmln_news
-       (id, slug, title, excerpt, content, category, category_label, league, club, image_url, views, author, is_breaking, is_featured, published_at, read_time)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
+       (id, slug, title, excerpt, content, category, category_label, league, club, image_url, views, author, is_breaking, is_featured, published_at, read_time,
+        source_url, source_name, original_title, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -121,7 +121,11 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
         body.isBreaking ? 1 : 0,
         body.isFeatured ? 1 : 0,
         new Date().toISOString(),
-        estimateReadTime(content)
+        estimateReadTime(content),
+        sourceUrl || null,
+        String(body.sourceName || "").trim() || null,
+        String(body.originalTitle || "").trim() || null,
+        session.id
       )
       .run();
 
@@ -132,18 +136,24 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
   }
 };
 
-// DELETE /api/news?id=... (admin only)
+// DELETE /api/news?id=... (admin: any article, editor: only their own)
 export const onRequestDelete = async ({ env, request }: { env: Env; request: Request }) => {
   const missing = requireDb(env);
   if (missing) return missing;
 
   try {
     await ensureRmlnSchema(env.DB);
-    const denied = await requireAdmin(request, env);
-    if (denied) return denied;
+    const session = await requireRole(request, env, STAFF_ROLES);
+    if (session instanceof Response) return session;
 
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return json({ error: "Missing id" }, 400);
+
+    if (session.role !== "admin") {
+      const own = await env.DB.prepare("SELECT created_by FROM rmln_news WHERE id = ?").bind(id).first();
+      if (!own) return json({ error: "Article not found" }, 404);
+      if (own.created_by !== session.id) return json({ error: "ลบได้เฉพาะข่าวที่คุณเขียนเอง" }, 403);
+    }
 
     await env.DB.prepare("DELETE FROM rmln_comments WHERE news_id = ?").bind(id).run();
     await env.DB.prepare("DELETE FROM rmln_reactions WHERE news_id = ?").bind(id).run();

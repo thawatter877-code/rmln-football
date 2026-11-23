@@ -20,6 +20,12 @@ export interface NewsArticle {
   /** Set for articles that come from an external RSS feed */
   sourceUrl?: string;
   sourceName?: string;
+  /** Original English headline (for translated articles) */
+  originalTitle?: string;
+  /** true when the text was machine-translated and not yet edited by staff */
+  autoTranslated?: boolean;
+  /** user id of the staff member who published it (editorial articles only) */
+  createdBy?: string;
   isLive: boolean;
 }
 
@@ -57,6 +63,10 @@ export function mapDbArticle(row: any): NewsArticle {
     isFeatured: !!row.is_featured,
     publishedAt: toIso(row.published_at || row.created_at),
     readTime: row.read_time || "3 นาที",
+    sourceUrl: row.source_url || undefined,
+    sourceName: row.source_name || undefined,
+    originalTitle: row.original_title || undefined,
+    createdBy: row.created_by || undefined,
     isLive: false,
   };
 }
@@ -81,6 +91,8 @@ export function mapLiveArticle(item: any): NewsArticle {
     readTime: item.readTime || "2 นาที",
     sourceUrl: item.sourceUrl,
     sourceName: item.sourceName,
+    originalTitle: item.titleOriginal,
+    autoTranslated: !!item.translated,
     isLive: true,
   };
 }
@@ -138,7 +150,9 @@ export function loadNewsFeed(force = false): Promise<NewsFeed> {
     const editorial = dbRes.status === "fulfilled" ? dbRes.value : (errors.push(dbRes.reason?.message), []);
     const live = liveRes.status === "fulfilled" ? liveRes.value : (errors.push(liveRes.reason?.message), []);
 
-    const articles = [...editorial, ...live].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    // Hide live items that staff already rewrote and published as an RMLN article
+    const published = new Set(editorial.map((a) => a.sourceUrl).filter(Boolean));
+    const articles = [...editorial, ...live.filter((a) => !published.has(a.sourceUrl))].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
     return { articles, editorialCount: editorial.length, liveCount: live.length, errors };
   })();
   return feedPromise;
@@ -157,4 +171,68 @@ export function handleImgError(e: { currentTarget: HTMLImageElement }) {
   if (img.dataset.fallback) return;
   img.dataset.fallback = "1";
   img.src = FALLBACK_IMAGE;
+}
+
+// ---------- Real fixtures & standings (/api/football, ESPN data) ----------
+
+export interface Match {
+  id: string;
+  league: string;
+  date: string;
+  state: "pre" | "in" | "post";
+  statusText: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeLogo: string;
+  awayLogo: string;
+  homeScore: number | null;
+  awayScore: number | null;
+}
+
+export interface StandingRow {
+  rank: number;
+  team: string;
+  logo: string;
+  played: number;
+  points: number;
+  goalDiff: number;
+}
+
+export interface FootballData {
+  league: string;
+  matches: Match[];
+  standings: StandingRow[];
+}
+
+let footballPromise: Promise<FootballData> | null = null;
+
+export function loadFootball(): Promise<FootballData> {
+  if (!footballPromise) {
+    footballPromise = fetch("/api/football")
+      .then((r) => r.json())
+      .then((d) => ({ league: d?.league || "", matches: d?.matches || [], standings: d?.standings || [] }))
+      .catch(() => ({ league: "", matches: [], standings: [] }));
+  }
+  return footballPromise;
+}
+
+/** Live first, then most recent results, then the next fixtures */
+export function pickMatches(matches: Match[], n: number): Match[] {
+  const live = matches.filter((m) => m.state === "in");
+  const done = matches.filter((m) => m.state === "post").sort((a, b) => b.date.localeCompare(a.date));
+  const next = matches.filter((m) => m.state === "pre").sort((a, b) => a.date.localeCompare(b.date));
+  return [...live, ...done.slice(0, Math.max(2, n - live.length - 2)), ...next].slice(0, n);
+}
+
+export function matchCenterText(m: Match): string {
+  if (m.state === "pre") {
+    return new Date(m.date).toLocaleString("th-TH", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  return `${m.homeScore ?? 0} - ${m.awayScore ?? 0}`;
+}
+
+export function matchStatusLabel(m: Match): string {
+  if (m.state === "post") return "FT";
+  if (m.state === "in") return m.statusText || "LIVE";
+  return new Date(m.date).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 }
