@@ -58,22 +58,42 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       if (!EMAIL_RE.test(email)) return json({ error: "รูปแบบอีเมลไม่ถูกต้อง" }, 400);
       if (password.length < 8) return json({ error: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" }, 400);
 
-      const existing = await env.DB.prepare("SELECT id FROM rmln_users WHERE username = ? OR email = ?")
+      const role = (await shouldBeAdmin(env, email)) ? "admin" : "member";
+      const nowIso = new Date().toISOString();
+
+      const existing = await env.DB.prepare(
+        "SELECT id, username, lower(email) AS email, last_login_at FROM rmln_users WHERE username = ? OR lower(email) = ?"
+      )
         .bind(username, email)
         .first();
-      if (existing) return json({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }, 400);
+
+      if (existing) {
+        // An account whose sign-up never completed (no session was ever issued, e.g. the server
+        // failed right after saving it) can be finished by signing up again with the SAME
+        // username AND email. Any account that has ever logged in is never overwritten.
+        const unfinished = !existing.last_login_at && existing.username === username && existing.email === email;
+        if (!unfinished) return json({ error: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้งานแล้ว" }, 400);
+
+        const cookie = await createSessionCookie(env, { id: existing.id, username, role }, request);
+        await env.DB.prepare(
+          "UPDATE rmln_users SET password_hash = ?, favorite_club = ?, role = ?, last_login_at = ? WHERE id = ?"
+        )
+          .bind(await hashPassword(password), favoriteClub, role, nowIso, existing.id)
+          .run();
+        return json({ success: true, user: await loadPublicUser(env, existing.id) }, 200, { "Set-Cookie": cookie });
+      }
 
       const userId = `u-${crypto.randomUUID()}`;
-      const role = (await shouldBeAdmin(env, email)) ? "admin" : "member";
+      // Create the session first so a failure here can't leave a half-created account behind
+      const cookie = await createSessionCookie(env, { id: userId, username, role }, request);
 
       await env.DB.prepare(
-        `INSERT INTO rmln_users (id, username, email, password_hash, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad, role)
-         VALUES (?, ?, ?, ?, ?, ?, 100000, 200, 'D4', 0, 50, ?)`
+        `INSERT INTO rmln_users (id, username, email, password_hash, display_name, favorite_club, coins, gems, academy_level, squad_count, max_squad, role, last_login_at)
+         VALUES (?, ?, ?, ?, ?, ?, 100000, 200, 'D4', 0, 50, ?, ?)`
       )
-        .bind(userId, username, email, await hashPassword(password), username, favoriteClub, role)
+        .bind(userId, username, email, await hashPassword(password), username, favoriteClub, role, nowIso)
         .run();
 
-      const cookie = await createSessionCookie(env, { id: userId, username, role }, request);
       return json({ success: true, user: await loadPublicUser(env, userId) }, 200, { "Set-Cookie": cookie });
     }
 
@@ -82,7 +102,7 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       const password = String(body.password || "");
       if (!identifier || !password) return json({ error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" }, 400);
 
-      const user = await env.DB.prepare("SELECT * FROM rmln_users WHERE username = ? OR email = ?")
+      const user = await env.DB.prepare("SELECT * FROM rmln_users WHERE username = ? OR lower(email) = ?")
         .bind(identifier, identifier.toLowerCase())
         .first();
 
@@ -106,6 +126,7 @@ export const onRequestPost = async ({ env, request }: { env: Env; request: Reque
       }
 
       const cookie = await createSessionCookie(env, { id: user.id, username: user.username, role }, request);
+      await env.DB.prepare("UPDATE rmln_users SET last_login_at = ? WHERE id = ?").bind(new Date().toISOString(), user.id).run();
       return json({ success: true, user: await loadPublicUser(env, user.id) }, 200, { "Set-Cookie": cookie });
     }
 
