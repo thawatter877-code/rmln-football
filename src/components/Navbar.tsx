@@ -1,46 +1,35 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   Flame, 
-  Sparkles, 
-  Trophy, 
   ArrowLeftRight, 
-  User, 
-  Menu, 
-  X, 
   LogOut,
   Shield,
   Activity,
-  Compass,
-  FileText
+  BookOpen,
+  Menu,
+  X,
+  ExternalLink
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { loadNewsFeed, articleHref, NewsArticle, loadFootball, pickMatches, matchCenterText, Match } from "@/lib/news";
+import { MOCK_FIXTURES } from "@/data/mockNews";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, logout, isStaff } = useAuth();
-  const [matches, setMatches] = useState<Match[]>([]);
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [latest, setLatest] = useState<NewsArticle[]>([]);
-
-  useEffect(() => {
-    loadNewsFeed()
-      .then((feed) => setLatest(feed.articles.slice(0, 1)))
-      .catch(() => {});
-    loadFootball().then((d) => setMatches(pickMatches(d.matches, 3)));
-  }, []);
 
   const navLinks = [
     { href: "/", label: "หน้าแรก" },
     { href: "/news?category=breaking", label: "ข่าวด่วน", icon: Flame },
     { href: "/news?league=Premier+League", label: "พรีเมียร์ลีก" },
     { href: "/news?league=UEFA+Champions+League", label: "แชมเปียนส์ลีก" },
+    { href: "/news?league=La+Liga", label: "ลาลีกา" },
     { href: "/news?category=transfer", label: "ตลาดซื้อขาย", icon: ArrowLeftRight },
-    { href: "/academy", label: "ดาวรุ่ง TOP 100", icon: Sparkles },
+    { href: "/news?category=analysis", label: "บทวิเคราะห์", icon: BookOpen },
   ];
 
   return (
@@ -54,27 +43,19 @@ export default function Navbar() {
               <Activity className="w-3 h-3 text-[#2f3437]" />
               รายงานล่าสุด
             </span>
-            {latest[0] ? (
-              <Link
-                href={articleHref(latest[0])}
-                className="text-[#37352f] font-medium truncate max-w-[280px] sm:max-w-[480px] hover:underline"
-              >
-                {latest[0].title}
-              </Link>
-            ) : (
-              <span className="text-[#9b9a97] truncate">กำลังโหลดข่าวล่าสุด...</span>
-            )}
+            <span className="text-[#37352f] font-medium truncate max-w-[280px] sm:max-w-[480px]">
+              สรุปผลประกบคู่ ยูฟ่า แชมเปียนส์ลีก รอบ 8 ทีมสุดท้าย และอัปเดตตลาดซื้อขายซัมเมอร์
+            </span>
           </div>
 
-          {/* Real match ticker (ESPN) */}
+          {/* Quick Match Ticker */}
           <div className="hidden md:flex items-center gap-5 overflow-x-auto text-[11px] text-[#787774] shrink-0">
-            {matches.map((f) => (
+            {MOCK_FIXTURES.slice(0, 3).map((f) => (
               <div key={f.id} className="flex items-center gap-1.5 whitespace-nowrap">
-                {f.state === "in" && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
                 <span className="text-[#9b9a97]">{f.league.split(" ")[0]}</span>
                 <span className="text-[#37352f] font-medium">{f.homeTeam}</span>
-                <span className="px-1.5 py-0.5 bg-white border border-[#e9e9e7] rounded text-[#2f3437] font-mono font-semibold">
-                  {matchCenterText(f)}
+                <span className="px-1.5 py-0.2 bg-white border border-[#e9e9e7] rounded text-[#2f3437] font-mono font-semibold">
+                  {f.homeScore !== null ? `${f.homeScore}-${f.awayScore}` : f.date}
                 </span>
                 <span className="text-[#37352f] font-medium">{f.awayTeam}</span>
               </div>
@@ -101,7 +82,7 @@ export default function Navbar() {
         </Link>
 
         {/* NAVIGATION LINKS */}
-        <nav className="hidden xl:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
@@ -109,7 +90,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
                   isActive
                     ? "bg-[#f1f1ef] text-[#2f3437] font-semibold"
                     : "text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3]"
@@ -126,36 +107,38 @@ export default function Navbar() {
         <div className="hidden sm:flex items-center gap-2.5">
           {user ? (
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-[#f1f1ef] border border-[#e9e9e7] flex items-center justify-center font-bold text-xs text-[#2f3437]">
-                  {(user.favoriteClub || user.displayName).charAt(0)}
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-[#e9e9e7] bg-[#fbfbfa]">
+                <div className="w-6 h-6 rounded-full bg-[#f1f1ef] border border-[#e9e9e7] flex items-center justify-center font-bold text-xs text-[#2f3437]">
+                  {user.favoriteClub.charAt(0)}
                 </div>
                 <div className="flex flex-col text-left">
-                  <span className="text-xs font-semibold text-[#2f3437] leading-tight max-w-[90px] truncate">
+                  <span className="text-xs font-semibold text-[#2f3437] leading-tight max-w-[100px] truncate">
                     {user.displayName}
                   </span>
                   <span className="text-[10px] text-[#9b9a97] leading-tight">
                     {user.favoriteClub}
                   </span>
                 </div>
-                {isStaff && (
-                  <Link
-                    href="/admin"
-                    title="ระบบจัดการข่าวสาร"
-                    className="p-1.5 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] text-[#787774] hover:text-[#2f3437] transition-colors"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                  </Link>
-                )}
-
-                <button
-                  onClick={logout}
-                  title="ออกจากระบบ"
-                  className="p-1 text-[#9b9a97] hover:text-[#2f3437] transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
               </div>
+
+              <a
+                href="https://undes-studio.pages.dev/admin-undes-vault/articles"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="ระบบจัดการข่าวสารหลังบ้าน (undes-studio)"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#e9e9e7] bg-[#fbfbfa] text-xs text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3] transition-colors"
+              >
+                <span>จัดการข่าว</span>
+                <ExternalLink className="w-3 h-3 text-[#9b9a97]" />
+              </a>
+
+              <button
+                onClick={logout}
+                title="ออกจากระบบ"
+                className="p-1.5 rounded-md text-[#9b9a97] hover:text-[#2f3437] hover:bg-[#f7f6f3] transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -178,7 +161,7 @@ export default function Navbar() {
         {/* MOBILE TOGGLE */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="xl:hidden p-1.5 rounded-md border border-[#e9e9e7] text-[#787774]"
+          className="lg:hidden p-1.5 rounded-md border border-[#e9e9e7] text-[#787774]"
           aria-label="Toggle menu"
         >
           {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -187,7 +170,7 @@ export default function Navbar() {
 
       {/* MOBILE DRAWER */}
       {mobileMenuOpen && (
-        <div className="xl:hidden border-t border-[#e9e9e7] bg-white p-4 space-y-3">
+        <div className="lg:hidden border-t border-[#e9e9e7] bg-white p-4 space-y-3">
           <nav className="flex flex-col space-y-1">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -206,10 +189,24 @@ export default function Navbar() {
               );
             })}
           </nav>
+
+          <div className="pt-2 border-t border-[#e9e9e7]">
+            <a
+              href="https://undes-studio.pages.dev/admin-undes-vault/articles"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 rounded-md text-xs font-medium text-[#787774] hover:text-[#2f3437] hover:bg-[#f7f6f3] flex items-center justify-between"
+            >
+              <span>ระบบจัดการหลังบ้าน (undes-studio)</span>
+              <ExternalLink className="w-3.5 h-3.5 text-[#9b9a97]" />
+            </a>
+          </div>
+
           {user ? (
             <div className="pt-3 border-t border-[#e9e9e7] flex items-center justify-between">
               <div className="text-xs">
-                <div className="font-semibold text-[#2f3437]">{user.displayName}{user.favoriteClub ? ` (${user.favoriteClub})` : ""}</div>
+                <div className="font-semibold text-[#2f3437]">{user.displayName}</div>
+                <div className="text-[#787774]">แฟนบอล: {user.favoriteClub}</div>
               </div>
               <button
                 onClick={() => {

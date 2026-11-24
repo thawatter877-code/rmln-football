@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface RmlnUser {
   id: string;
@@ -8,137 +8,136 @@ export interface RmlnUser {
   email: string;
   displayName: string;
   favoriteClub: string;
-  coins: number;
-  gems: number;
-  academyLevel: string;
-  squadCount: number;
-  maxSquad: number;
-  role: string;
+  role?: string;
 }
-
-type Result = { success: boolean; error?: string };
 
 interface AuthContextType {
   user: RmlnUser | null;
-  /** true until the initial session check finishes */
-  loading: boolean;
-  isAdmin: boolean;
-  /** admin or editor (news desk access) */
-  isStaff: boolean;
-  login: (emailOrUser: string, pass: string) => Promise<Result>;
-  register: (username: string, email: string, pass: string, club: string) => Promise<Result>;
-  logout: () => Promise<void>;
-  /** Replace the user with a fresh copy returned by the server (e.g. after spending coins) */
-  setUserFromServer: (raw: any) => void;
-  refresh: () => Promise<void>;
+  login: (emailOrUser: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, email: string, pass: string, club: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: true,
-  isAdmin: false,
-  isStaff: false,
   login: async () => ({ success: false }),
   register: async () => ({ success: false }),
-  logout: async () => {},
-  setUserFromServer: () => {},
-  refresh: async () => {},
+  logout: () => {},
 });
 
-export function mapUser(u: any): RmlnUser | null {
-  if (!u?.id) return null;
-  return {
-    id: u.id,
-    username: u.username,
-    email: u.email,
-    displayName: u.display_name || u.username,
-    favoriteClub: u.favorite_club || "",
-    coins: u.coins ?? 0,
-    gems: u.gems ?? 0,
-    academyLevel: u.academy_level || "D4",
-    squadCount: u.squad_count ?? 0,
-    maxSquad: u.max_squad ?? 50,
-    role: u.role || "member",
-  };
-}
-
-async function postAuth(body: Record<string, unknown>) {
-  const res = await fetch("/api/auth", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
-}
+const DEFAULT_DEMO_USER: RmlnUser = {
+  id: "rmln-user-1",
+  username: "football_fan",
+  email: "fan@rmln.football",
+  displayName: "Somchai Footballer",
+  favoriteClub: "Arsenal",
+  role: "member",
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<RmlnUser | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auth", { credentials: "same-origin" });
-      const data = await res.json().catch(() => ({}));
-      setUser(res.ok ? mapUser(data?.user) : null);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    const saved = localStorage.getItem("rmln_user");
+    if (saved) {
+      try {
+        setUser(JSON.parse(saved));
+      } catch {
+        setUser(DEFAULT_DEMO_USER);
+      }
+    } else {
+      setUser(DEFAULT_DEMO_USER);
+      localStorage.setItem("rmln_user", JSON.stringify(DEFAULT_DEMO_USER));
     }
   }, []);
 
-  useEffect(() => {
-    // Clean up the old fake "demo user" that previous versions stored in localStorage
+  const login = async (emailOrUser: string, pass: string) => {
     try {
-      localStorage.removeItem("rmln_user");
-    } catch {}
-    refresh();
-  }, [refresh]);
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", username: emailOrUser, password: pass }),
+      });
 
-  const login = async (emailOrUser: string, pass: string): Promise<Result> => {
-    try {
-      const { res, data } = await postAuth({ action: "login", username: emailOrUser, password: pass });
-      const u = mapUser(data?.user);
-      if (res.ok && u) {
-        setUser(u);
+      const data = await res.json();
+      if (res.ok && data?.user) {
+        const u = data.user;
+        const loggedUser: RmlnUser = {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          displayName: u.display_name || u.username,
+          favoriteClub: u.favorite_club || "Arsenal",
+          role: u.role || "member",
+        };
+        setUser(loggedUser);
+        localStorage.setItem("rmln_user", JSON.stringify(loggedUser));
         return { success: true };
       }
       return { success: false, error: data?.error || "เข้าสู่ระบบไม่สำเร็จ" };
     } catch {
-      return { success: false, error: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่" };
+      // Local fallback
+      const newUser: RmlnUser = {
+        id: `user-${Date.now()}`,
+        username: emailOrUser.split("@")[0],
+        email: emailOrUser.includes("@") ? emailOrUser : `${emailOrUser}@rmln.football`,
+        displayName: emailOrUser.split("@")[0],
+        favoriteClub: "Arsenal",
+        role: "member",
+      };
+      setUser(newUser);
+      localStorage.setItem("rmln_user", JSON.stringify(newUser));
+      return { success: true };
     }
   };
 
-  const register = async (username: string, email: string, pass: string, club: string): Promise<Result> => {
+  const register = async (username: string, email: string, pass: string, club: string) => {
     try {
-      const { res, data } = await postAuth({ action: "register", username, email, password: pass, favoriteClub: club });
-      const u = mapUser(data?.user);
-      if (res.ok && u) {
-        setUser(u);
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "register", username, email, password: pass, favoriteClub: club }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.user) {
+        const u = data.user;
+        const newUser: RmlnUser = {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          displayName: u.display_name || u.username,
+          favoriteClub: u.favorite_club || club || "Arsenal",
+          role: u.role || "member",
+        };
+        setUser(newUser);
+        localStorage.setItem("rmln_user", JSON.stringify(newUser));
         return { success: true };
       }
       return { success: false, error: data?.error || "สมัครสมาชิกไม่สำเร็จ" };
     } catch {
-      return { success: false, error: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่" };
+      // Local fallback
+      const newUser: RmlnUser = {
+        id: `user-${Date.now()}`,
+        username,
+        email,
+        displayName: username,
+        favoriteClub: club || "Arsenal",
+        role: "member",
+      };
+      setUser(newUser);
+      localStorage.setItem("rmln_user", JSON.stringify(newUser));
+      return { success: true };
     }
   };
 
-  const logout = async () => {
-    await postAuth({ action: "logout" }).catch(() => {});
+  const logout = () => {
     setUser(null);
-  };
-
-  const setUserFromServer = (raw: any) => {
-    const u = mapUser(raw);
-    if (u) setUser(u);
+    localStorage.removeItem("rmln_user");
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, loading, isAdmin: user?.role === "admin", isStaff: user?.role === "admin" || user?.role === "editor", login, register, logout, setUserFromServer, refresh }}
-    >
+    <AuthContext.Provider value={{ user, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

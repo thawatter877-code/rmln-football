@@ -12,17 +12,14 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password) return;
+    if (!username.trim()) return;
     setLoading(true);
-    setError(null);
-    const result = await login(username.trim(), password);
+    await login(username, password);
     setLoading(false);
-    if (result.success) router.push("/");
-    else setError(result.error || "เข้าสู่ระบบไม่สำเร็จ");
+    router.push("/");
   };
 
   return (
@@ -31,24 +28,19 @@ export default function LoginPage() {
         
         {/* Header */}
         <div className="text-center space-y-1.5">
-          <div className="w-9 h-9 rounded-md bg-[#2f3437] flex items-center justify-center p-1.5 mx-auto">
+          <div className="w-9 h-9 rounded-md bg-[#2f3437] flex items-center justify-center p-1.5 shadow-xs mx-auto">
             <img src="/logo.svg" alt="RMLN" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-lg font-bold text-[#2f3437]">
             เข้าสู่ระบบ RMLN
           </h1>
           <p className="text-xs text-[#787774]">
-            ใช้บัญชี RMLN หรืออีเมลและรหัสผ่านเดียวกับ undes-studio ได้เลย
+            บัญชีสมาชิกสำหรับร่วมแสดงความคิดเห็นและวิเคราะห์ข่าวฟุตบอล
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          {error && (
-            <div role="alert" className="p-2.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
-              {error}
-            </div>
-          )}
           <div>
             <label className="text-xs font-medium text-[#2f3437] block mb-1">
               ชื่อผู้ใช้ หรือ อีเมล

@@ -19,21 +19,14 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [favoriteClub, setFavoriteClub] = useState("Arsenal");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !email.trim()) return;
-    if (password.length < 8) {
-      setError("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
-      return;
-    }
     setLoading(true);
-    setError(null);
-    const result = await register(username.trim(), email.trim(), password, favoriteClub);
+    await register(username.trim(), email.trim(), password, favoriteClub);
     setLoading(false);
-    if (result.success) router.push("/");
-    else setError(result.error || "สมัครสมาชิกไม่สำเร็จ");
+    router.push("/");
   };
 
   return (
@@ -42,24 +35,19 @@ export default function RegisterPage() {
         
         {/* Header */}
         <div className="text-center space-y-1.5">
-          <div className="w-9 h-9 rounded-md bg-[#2f3437] flex items-center justify-center p-1.5 mx-auto">
+          <div className="w-9 h-9 rounded-md bg-[#2f3437] flex items-center justify-center p-1.5 shadow-xs mx-auto">
             <img src="/logo.svg" alt="RMLN" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-lg font-bold text-[#2f3437]">
             สมัครสมาชิก RMLN
           </h1>
           <p className="text-xs text-[#787774]">
-            สร้างบัญชีเพื่อร่วมแสดงความคิดเห็นและกดรีแอคชันข่าว
+            สร้างบัญชีแฟนบอลเพื่อร่วมแสดงความคิดเห็นและวิเคราะห์เกมลูกหนัง
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          {error && (
-            <div role="alert" className="p-2.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
-              {error}
-            </div>
-          )}
           <div>
             <label className="text-xs font-medium text-[#2f3437] block mb-1">
               ชื่อผู้ใช้ (Username)
